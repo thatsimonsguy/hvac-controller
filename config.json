@@ -7,8 +7,8 @@
     "role_rotation_minutes": 1440,
     "gpio": {
         "boiler_relay": 17,
-        "secondary_relay": 27,
-        "primary_relay": 22,
+        "heat_pump_A_relay": 27,
+        "heat_pump_B_relay": 22,
         "buffer_temp_sensor": 4
     }
 }

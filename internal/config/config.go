@@ -11,8 +11,8 @@ import (
 
 type GPIO struct {
 	BoilerRelayPin      *int `json:"boiler_relay"`
-	SecondaryRelayPin   *int `json:"secondary_relay"`
-	PrimaryRelayPin     *int `json:"primary_relay"`
+	HeatPumpARelayPin   *int `json:"secondary_relay"`
+	HeatPumpBRelayPin     *int `json:"primary_relay"`
 	BufferTempSensorPin *int `json:"buffer_temp_sensor"`
 }
 
@@ -76,10 +76,10 @@ func (cfg *Config) validate() {
 	if cfg.GPIO.BoilerRelayPin == nil {
 		missing = append(missing, "gpio.boiler_relay")
 	}
-	if cfg.GPIO.SecondaryRelayPin == nil {
+	if cfg.GPIO.HeatPumpARelayPin == nil {
 		missing = append(missing, "gpio.secondary_relay")
 	}
-	if cfg.GPIO.PrimaryRelayPin == nil {
+	if cfg.GPIO.HeatPumpBRelayPin == nil {
 		missing = append(missing, "gpio.primary_relay")
 	}
 	if cfg.GPIO.BufferTempSensorPin == nil {
