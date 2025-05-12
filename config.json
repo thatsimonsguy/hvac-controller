@@ -1,0 +1,14 @@
+{
+    "heating_threshold": 120.0,
+    "cooling_threshold": 45.0,
+    "spread": 5.0,
+    "secondary_margin": 10.0,
+    "tertiary_margin": 30.0,
+    "role_rotation_minutes": 1440,
+    "gpio": {
+        "boiler_relay": 17,
+        "secondary_relay": 27,
+        "primary_relay": 22,
+        "buffer_temp_sensor": 4
+    }
+}

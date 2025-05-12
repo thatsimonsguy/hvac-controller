@@ -1,0 +1,23 @@
+{
+  "system_mode": "heating",
+  "zones": [
+    {
+      "id": "main_floor",
+      "label": "Main Floor",
+      "setpoint": 70,
+      "capabilities": ["heating", "cooling", "fan"]
+    },
+    {
+      "id": "basement",
+      "label": "Basement",
+      "setpoint": 70,
+      "capabilities": ["heating", "cooling", "fan"]
+    },
+    {
+      "id": "garage",
+      "label": "Garage",
+      "setpoint": 70,
+      "capabilities": ["heating"]
+    }
+  ]
+}
