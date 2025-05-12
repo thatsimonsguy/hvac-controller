@@ -4,30 +4,32 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 )
 
 type Device struct {
 	Name        string
-	IsOn        bool
+	Pin         int
 	LastChanged time.Time
 	MinOn       time.Duration
 	MinOff      time.Duration
-	OnFunc      func()
-	OffFunc     func()
+}
+
+func (d *Device) IsOn() bool {
+	return gpio.Read(d.Pin)
 }
 
 func (d *Device) CanTurnOn(now time.Time) bool {
-	return !d.IsOn && now.Sub(d.LastChanged) >= d.MinOff
+	return !d.IsOn() && now.Sub(d.LastChanged) >= d.MinOff
 }
 
 func (d *Device) CanTurnOff(now time.Time) bool {
-	return d.IsOn && now.Sub(d.LastChanged) >= d.MinOn
+	return d.IsOn() && now.Sub(d.LastChanged) >= d.MinOn
 }
 
 func (d *Device) TurnOn(now time.Time) {
 	if d.CanTurnOn(now) {
-		d.OnFunc()
-		d.IsOn = true
+		gpio.Set(d.Pin, true)
 		d.LastChanged = now
 		log.Info().Str("device", d.Name).Msg("Turned ON")
 	}
@@ -35,8 +37,7 @@ func (d *Device) TurnOn(now time.Time) {
 
 func (d *Device) TurnOff(now time.Time) {
 	if d.CanTurnOff(now) {
-		d.OffFunc()
-		d.IsOn = false
+		gpio.Set(d.Pin, false)
 		d.LastChanged = now
 		log.Info().Str("device", d.Name).Msg("Turned OFF")
 	}

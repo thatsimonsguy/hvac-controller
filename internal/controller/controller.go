@@ -30,23 +30,29 @@ func New(cfg config.Config, state *model.SystemState) *Controller {
 	now := time.Now()
 
 	primaryDevice := &Device{
-		Name:        "heat_pump_A",
-		LastChanged: now,
-		MinOn:       5 * time.Minute,
-		MinOff:      5 * time.Minute,
-	}
-	secondaryDevice := &Device{
-		Name:        "heat_pump_B",
-		LastChanged: now,
-		MinOn:       5 * time.Minute,
-		MinOff:      5 * time.Minute,
-	}
-	boiler := &Device{
-		Name:        "boiler",
-		LastChanged: now,
-		MinOn:       5 * time.Minute,
-		MinOff:      5 * time.Minute,
-	}
+	Name:        "heat_pump_A",
+	Pin:         *cfg.GPIO.HeatPumpARelayPin,
+	LastChanged: now,
+	MinOn:       5 * time.Minute,
+	MinOff:      5 * time.Minute,
+}
+
+secondaryDevice := &Device{
+	Name:        "heat_pump_B",
+	Pin:         *cfg.GPIO.HeatPumpBRelayPin,
+	LastChanged: now,
+	MinOn:       5 * time.Minute,
+	MinOff:      5 * time.Minute,
+}
+
+boiler := &Device{
+	Name:        "boiler",
+	Pin:         *cfg.GPIO.BoilerRelayPin,
+	LastChanged: now,
+	MinOn:       5 * time.Minute,
+	MinOff:      5 * time.Minute,
+}
+
 
 	return &Controller{
 		cfg:   cfg,
