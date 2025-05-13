@@ -4,23 +4,19 @@ import (
 	"testing"
 )
 
+func boolPtr(b bool) *bool {
+	return &b
+}
+
 func TestValidate_GPIOValid(t *testing.T) {
 	cfg := Config{
 		GPIO: GPIO{
-			"main_floor_temp_sensor": &GPIOPin{Pin: 5, SafeState: true},
-			"basement_temp_sensor":   &GPIOPin{Pin: 6, SafeState: true},
-			"garage_temp_sensor":     &GPIOPin{Pin: 12, SafeState: true},
-			"main_floor_air_blower":  &GPIOPin{Pin: 13, SafeState: true},
-			"main_floor_air_pump":    &GPIOPin{Pin: 16, SafeState: true},
-			"basement_air_blower":    &GPIOPin{Pin: 19, SafeState: true},
-			"basement_air_pump":      &GPIOPin{Pin: 20, SafeState: true},
-			"basement_radiant_pump":  &GPIOPin{Pin: 21, SafeState: true},
-			"garage_radiant_pump":    &GPIOPin{Pin: 26, SafeState: true},
-			"boiler_relay":           &GPIOPin{Pin: 17, SafeState: true},
-			"heat_pump_A_relay":      &GPIOPin{Pin: 27, SafeState: true},
-			"heat_pump_B_relay":      &GPIOPin{Pin: 22, SafeState: true},
-			"buffer_temp_sensor":     &GPIOPin{Pin: 4, SafeState: true},
-			"main_power_relay":       &GPIOPin{Pin: 23, SafeState: false},
+			"temp_sensor_bus": &GPIOPin{Pin: 4, SafeState: nil}, // unmanaged
+
+			"boiler_relay":          &GPIOPin{Pin: 17, SafeState: boolPtr(true)},
+			"main_power_relay":      &GPIOPin{Pin: 23, SafeState: boolPtr(false)},
+			"main_floor_air_blower": &GPIOPin{Pin: 5, SafeState: boolPtr(true)},
+			"basement_air_pump":     &GPIOPin{Pin: 6, SafeState: boolPtr(true)},
 		},
 	}
 
@@ -30,8 +26,8 @@ func TestValidate_GPIOValid(t *testing.T) {
 func TestValidate_GPIO_Missing(t *testing.T) {
 	cfg := Config{
 		GPIO: GPIO{
-			"main_floor_temp_sensor": nil, // Missing
-			"basement_temp_sensor":   &GPIOPin{Pin: 6, SafeState: true},
+			"boiler_relay":     nil,
+			"main_power_relay": &GPIOPin{Pin: 23, SafeState: boolPtr(false)},
 		},
 	}
 
@@ -47,8 +43,8 @@ func TestValidate_GPIO_Missing(t *testing.T) {
 func TestValidate_GPIO_Conflict(t *testing.T) {
 	cfg := Config{
 		GPIO: GPIO{
-			"main_floor_temp_sensor": &GPIOPin{Pin: 5, SafeState: true},
-			"basement_temp_sensor":   &GPIOPin{Pin: 5, SafeState: true}, // Conflict
+			"boiler_relay":     &GPIOPin{Pin: 17, SafeState: boolPtr(true)},
+			"main_power_relay": &GPIOPin{Pin: 17, SafeState: boolPtr(false)}, // conflict
 		},
 	}
 

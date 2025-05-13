@@ -22,7 +22,7 @@ func main() {
 	if cfg.SafeMode {
 		log.Warn().Msg("SAFE MODE ENABLED — GPIO Set() is disabled system-wide")
 	}
-	
+
 	if err := gpio.ValidateStartupPins(cfg); err != nil {
 		log.Fatal().Err(err).Msg("Refusing to enable relay board due to unsafe pin states")
 	}
