@@ -10,6 +10,7 @@
         "boiler_relay": 17,
         "heat_pump_A_relay": 27,
         "heat_pump_B_relay": 22,
-        "buffer_temp_sensor": 4
+        "buffer_temp_sensor": 4,
+        "main_power_relay": 5
     }
 }
