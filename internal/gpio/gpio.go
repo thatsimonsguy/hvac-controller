@@ -11,13 +11,25 @@ import (
 var (
 	mu    sync.RWMutex
 	state = make(map[int]bool)
+	safeModeEnabled bool
 
 	setFn  = defaultSet
 	readFn = defaultRead
 )
 
+func SetSafeMode(enabled bool) {
+	safeModeEnabled = enabled
+}
+
 // Set energizes or de-energizes a GPIO pin (true = ON)
 func Set(pin int, on bool) {
+	if safeModeEnabled {
+		log.Warn().
+			Int("pin", pin).
+			Bool("requested_state", on).
+			Msg("Safe mode enabled — skipping Set()")
+		return
+	}
 	setFn(pin, on)
 }
 
