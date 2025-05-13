@@ -51,5 +51,8 @@
             "pin": 23,
             "safe_state": false
         }
+    },
+    "sensors": {
+        "TODO": "ADD SENSORS"
     }
 }

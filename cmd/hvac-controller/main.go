@@ -1,9 +1,15 @@
 package main
 
 import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/rs/zerolog/log"
 
 	"github.com/thatsimonsguy/hvac-controller/internal/config"
+	"github.com/thatsimonsguy/hvac-controller/internal/controller"
 	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/logging"
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
@@ -43,7 +49,19 @@ func main() {
 		Int("zones", len(state.Zones)).
 		Msg("Loaded system state")
 
-	// @todo: start controller loop
+	ctrl := controller.New(cfg, state)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go ctrl.Run(ctx)
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+
+	<-sig
+	log.Info().Msg("Shutdown signal received — exiting")
+
 	// @todo: start HTTP server
 
 	select {} // block forever for now
