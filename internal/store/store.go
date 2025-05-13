@@ -3,7 +3,7 @@ package store
 import (
 	"encoding/json"
 	"os"
-	
+
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
 )
 

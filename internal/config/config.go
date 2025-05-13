@@ -12,14 +12,14 @@ import (
 type GPIO struct {
 	BoilerRelayPin      *int `json:"boiler_relay"`
 	HeatPumpARelayPin   *int `json:"secondary_relay"`
-	HeatPumpBRelayPin     *int `json:"primary_relay"`
+	HeatPumpBRelayPin   *int `json:"primary_relay"`
 	BufferTempSensorPin *int `json:"buffer_temp_sensor"`
 }
 
 type Config struct {
-	StateFile        string
-	ConfigFile       string
-	LogLevel         zerolog.Level
+	StateFile  string
+	ConfigFile string
+	LogLevel   zerolog.Level
 
 	HeatingThreshold float64 `json:"heating_threshold"`
 	CoolingThreshold float64 `json:"cooling_threshold"`
@@ -28,6 +28,7 @@ type Config struct {
 	TertiaryMargin   float64 `json:"tertiary_margin"`
 
 	RoleRotationMinutes int `json:"role_rotation_minutes"`
+	PollIntervalSeconds int `json:"poll_interval_seconds"`
 
 	GPIO GPIO `json:"gpio"`
 }
@@ -51,6 +52,10 @@ func Load() Config {
 
 	if err := json.NewDecoder(file).Decode(&cfg); err != nil {
 		panic("Failed to parse config file: " + err.Error())
+	}
+
+	if cfg.PollIntervalSeconds == 0 {
+		cfg.PollIntervalSeconds = 30
 	}
 
 	cfg.validate()

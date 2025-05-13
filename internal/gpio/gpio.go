@@ -5,20 +5,51 @@ import (
 )
 
 var (
-	stateMu sync.RWMutex
-	state   = make(map[int]bool) // pin number → current state
+	mu    sync.RWMutex
+	state = make(map[int]bool)
+
+	setFn  = defaultSet
+	readFn = defaultRead
 )
 
-// Set sets the given pin to high (true) or low (false)
+// Set energizes or de-energizes a GPIO pin (true = ON)
 func Set(pin int, on bool) {
-	stateMu.Lock()
-	defer stateMu.Unlock()
+	setFn(pin, on)
+}
+
+// Read returns true if the GPIO pin is currently energized
+func Read(pin int) bool {
+	return readFn(pin)
+}
+
+// --- Default backend ---
+
+func defaultSet(pin int, on bool) {
+	mu.Lock()
+	defer mu.Unlock()
 	state[pin] = on
 }
 
-// Read returns true if the pin is energized
-func Read(pin int) bool {
-	stateMu.RLock()
-	defer stateMu.RUnlock()
+func defaultRead(pin int) bool {
+	mu.RLock()
+	defer mu.RUnlock()
 	return state[pin]
+}
+
+// --- Testing hooks ---
+
+// MockGPIO overrides the Set and Read logic for tests
+func MockGPIO(set func(int, bool), read func(int) bool) {
+	setFn = set
+	readFn = read
+}
+
+// ResetGPIO resets the internal GPIO state and restores default behavior
+func ResetGPIO() {
+	mu.Lock()
+	defer mu.Unlock()
+
+	state = make(map[int]bool)
+	setFn = defaultSet
+	readFn = defaultRead
 }
