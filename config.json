@@ -7,17 +7,9 @@
     "role_rotation_minutes": 1440,
     "poll_interval_seconds": 30,
     "gpio": {
-        "main_floor_temp_sensor": {
-            "pin": 5,
-            "safe_state": true
-        },
-        "basement_temp_sensor": {
-            "pin": 6,
-            "safe_state": true
-        },
-        "garage_temp_sensor": {
-            "pin": 12,
-            "safe_state": true
+        "temp_sensor_bus": {
+            "pin": 4,
+            "safe_state": null
         },
         "main_floor_air_blower": {
             "pin": 13,
@@ -53,10 +45,6 @@
         },
         "heat_pump_B_relay": {
             "pin": 22,
-            "safe_state": true
-        },
-        "buffer_temp_sensor": {
-            "pin": 4,
             "safe_state": true
         },
         "main_power_relay": {

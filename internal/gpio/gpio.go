@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	mu    sync.RWMutex
-	state = make(map[int]bool)
+	mu              sync.RWMutex
+	state           = make(map[int]bool)
 	safeModeEnabled bool
 
 	setFn  = defaultSet
@@ -56,8 +56,13 @@ func ValidateStartupPins(cfg config.Config) error {
 	var violations []string
 
 	for name, pinDef := range cfg.GPIO {
+		if pinDef.SafeState == nil {
+			log.Debug().Str("pin", name).Msg("Skipping safe state check for unmanaged pin")
+			continue
+		}
+
 		actual := Read(pinDef.Pin)
-		if actual != pinDef.SafeState {
+		if actual != *pinDef.SafeState {
 			violations = append(violations,
 				fmt.Sprintf("pin %d (gpio.%s) is %v but expected %v",
 					pinDef.Pin, name, actual, pinDef.SafeState))

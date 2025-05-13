@@ -10,8 +10,8 @@ import (
 )
 
 type GPIOPin struct {
-	Pin       int  `json:"pin"`
-	SafeState bool `json:"safe_state"` // true = HIGH, false = LOW
+	Pin       int   `json:"pin"`
+	SafeState *bool `json:"safe_state"` // true = HIGH, false = LOW, null = SENSOR INPUT
 }
 
 type GPIO map[string]*GPIOPin
@@ -20,7 +20,7 @@ type Config struct {
 	StateFile  string
 	ConfigFile string
 	LogLevel   zerolog.Level
-	SafeMode bool `json:"safe_mode"`
+	SafeMode   bool `json:"safe_mode"`
 
 	HeatingThreshold float64 `json:"heating_threshold"`
 	CoolingThreshold float64 `json:"cooling_threshold"`
@@ -45,7 +45,7 @@ func Load() Config {
 	flag.Parse()
 
 	cfg.LogLevel = parseLogLevel(logLevel)
-	
+
 	file, err := os.Open(cfg.ConfigFile)
 	if err != nil {
 		panic("Failed to load config file: " + err.Error())
