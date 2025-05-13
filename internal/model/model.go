@@ -10,10 +10,10 @@ const (
 )
 
 type Zone struct {
-	ID           string    `json:"id"`
-	Label        string    `json:"label"`
-	Setpoint     float64   `json:"setpoint"`
-	Capabilities []string  `json:"capabilities"` // e.g. ["heating", "cooling"]
+	ID           string   `json:"id"`
+	Label        string   `json:"label"`
+	Setpoint     float64  `json:"setpoint"`
+	Capabilities []string `json:"capabilities"` // e.g. ["heating", "cooling"]
 }
 
 type SystemState struct {

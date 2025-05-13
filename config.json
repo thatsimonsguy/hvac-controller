@@ -5,6 +5,7 @@
     "secondary_margin": 10.0,
     "tertiary_margin": 30.0,
     "role_rotation_minutes": 1440,
+    "poll_interval_seconds": 30,
     "gpio": {
         "boiler_relay": 17,
         "heat_pump_A_relay": 27,
