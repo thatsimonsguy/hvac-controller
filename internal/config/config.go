@@ -15,6 +15,7 @@ type GPIOPin struct {
 }
 
 type GPIO map[string]*GPIOPin
+type Sensors map[string]string // e.g. "garage_temp" => "28-xxxxxx"
 
 type Config struct {
 	StateFile  string
