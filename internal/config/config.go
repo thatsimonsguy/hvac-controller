@@ -3,16 +3,36 @@ package config
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
+	"reflect"
 	"strings"
 
 	"github.com/rs/zerolog"
 )
 
 type GPIO struct {
-	BoilerRelayPin      *int `json:"boiler_relay"`
-	HeatPumpARelayPin   *int `json:"secondary_relay"`
-	HeatPumpBRelayPin   *int `json:"primary_relay"`
+	// temp sensors
+	MainFloorTempSensor *int `json:"main_floor_temp_sensor"`
+	BasementTempSensor  *int `json:"basement_temp_sensor"`
+	GarageTempSensor    *int `json:"garage_temp_sensor"`
+
+	// air handlers
+	MainFloorAirBlower *int `json:"main_floor_air_blower"`
+	MainFloorAirPump   *int `json:"main_floor_air_pump"`
+	BasementAirBlower  *int `json:"basement_air_blower"`
+	BasementAirPump    *int `json:"basement_air_pump"`
+
+	// radiant heating pumps
+	BasementRadiantPump *int `json:"basement_radiant_pump"`
+	GarageRadiantPump   *int `json:"garage_radiant_pump"`
+
+	// heating and cooling sources
+	BoilerRelayPin    *int `json:"boiler_relay"`
+	HeatPumpARelayPin *int `json:"heat_pump_A_relay"`
+	HeatPumpBRelayPin *int `json:"heat_pump_B_relay"`
+
+	// misc
 	BufferTempSensorPin *int `json:"buffer_temp_sensor"`
 	MainPowerRelayPin   *int `json:"main_power_relay"`
 }
@@ -77,25 +97,36 @@ func parseLogLevel(level string) zerolog.Level {
 }
 
 func (cfg *Config) validate() {
-	missing := []string{}
+	var (
+		missingFields []string
+		usedPins      = map[int]string{}
+		conflicts     []string
+	)
 
-	if cfg.GPIO.BoilerRelayPin == nil {
-		missing = append(missing, "gpio.boiler_relay")
-	}
-	if cfg.GPIO.HeatPumpARelayPin == nil {
-		missing = append(missing, "gpio.secondary_relay")
-	}
-	if cfg.GPIO.HeatPumpBRelayPin == nil {
-		missing = append(missing, "gpio.primary_relay")
-	}
-	if cfg.GPIO.BufferTempSensorPin == nil {
-		missing = append(missing, "gpio.buffer_temp_sensor")
-	}
-	if cfg.GPIO.MainPowerRelayPin == nil {
-		missing = append(missing, "gpio.main_power_relay")
+	v := reflect.ValueOf(cfg.GPIO)
+	t := reflect.TypeOf(cfg.GPIO)
+
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		fieldName := t.Field(i).Tag.Get("json")
+
+		if field.IsNil() {
+			missingFields = append(missingFields, "gpio."+fieldName)
+			continue
+		}
+
+		pin := field.Elem().Int()
+		if other, exists := usedPins[int(pin)]; exists {
+			conflicts = append(conflicts, fmt.Sprintf("gpio.%s and gpio.%s both use pin %d", fieldName, other, pin))
+		} else {
+			usedPins[int(pin)] = fieldName
+		}
 	}
 
-	if len(missing) > 0 {
-		panic("Missing required GPIO config fields: " + strings.Join(missing, ", "))
+	if len(missingFields) > 0 {
+		panic("Missing required GPIO config fields: " + strings.Join(missingFields, ", "))
+	}
+	if len(conflicts) > 0 {
+		panic("Conflicting GPIO pins: " + strings.Join(conflicts, ", "))
 	}
 }
