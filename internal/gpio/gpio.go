@@ -1,7 +1,11 @@
 package gpio
 
 import (
+	"fmt"
 	"sync"
+
+	"github.com/rs/zerolog/log"
+	"github.com/thatsimonsguy/hvac-controller/internal/config"
 )
 
 var (
@@ -34,6 +38,37 @@ func defaultRead(pin int) bool {
 	mu.RLock()
 	defer mu.RUnlock()
 	return state[pin]
+}
+
+func ValidateStartupPins(cfg config.Config) error {
+	var violations []string
+
+	for name, pinDef := range cfg.GPIO {
+		actual := Read(pinDef.Pin)
+		if actual != pinDef.SafeState {
+			violations = append(violations,
+				fmt.Sprintf("pin %d (gpio.%s) is %v but expected %v",
+					pinDef.Pin, name, actual, pinDef.SafeState))
+		}
+	}
+
+	if len(violations) > 0 {
+		for _, v := range violations {
+			log.Error().Msg(v)
+		}
+		return fmt.Errorf("unsafe GPIO pin states at startup")
+	}
+
+	log.Info().Msg("All GPIO pins match safe state config at startup")
+	return nil
+}
+
+func GetPin(cfg config.Config, key string) int {
+	pinDef, ok := cfg.GPIO[key]
+	if !ok {
+		panic(fmt.Sprintf("GPIO config missing for key: %s", key))
+	}
+	return pinDef.Pin
 }
 
 // --- Testing hooks ---

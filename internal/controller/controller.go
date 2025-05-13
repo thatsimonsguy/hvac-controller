@@ -7,6 +7,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/thatsimonsguy/hvac-controller/internal/config"
+	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
 )
 
@@ -32,7 +33,7 @@ func New(cfg config.Config, state *model.SystemState) *Controller {
 
 	primaryDevice := &Device{
 		Name:        "heat_pump_A",
-		Pin:         *cfg.GPIO.HeatPumpARelayPin,
+		Pin:         gpio.GetPin(cfg, "heat_pump_A_relay"),
 		LastChanged: now,
 		MinOn:       5 * time.Minute,
 		MinOff:      5 * time.Minute,
@@ -40,7 +41,7 @@ func New(cfg config.Config, state *model.SystemState) *Controller {
 
 	secondaryDevice := &Device{
 		Name:        "heat_pump_B",
-		Pin:         *cfg.GPIO.HeatPumpBRelayPin,
+		Pin:         gpio.GetPin(cfg, "heat_pump_B_relay"),
 		LastChanged: now,
 		MinOn:       5 * time.Minute,
 		MinOff:      5 * time.Minute,
@@ -48,7 +49,7 @@ func New(cfg config.Config, state *model.SystemState) *Controller {
 
 	boiler := &Device{
 		Name:        "boiler",
-		Pin:         *cfg.GPIO.BoilerRelayPin,
+		Pin:         gpio.GetPin(cfg, "boiler_relay"),
 		LastChanged: now,
 		MinOn:       5 * time.Minute,
 		MinOff:      5 * time.Minute,
@@ -56,7 +57,7 @@ func New(cfg config.Config, state *model.SystemState) *Controller {
 
 	relayBoard := &Device{
 		Name:        "main_enable",
-		Pin:         *cfg.GPIO.MainPowerRelayPin,
+		Pin:         gpio.GetPin(cfg, "main_power_relay"),
 		LastChanged: now,
 		MinOn:       0,
 		MinOff:      0,

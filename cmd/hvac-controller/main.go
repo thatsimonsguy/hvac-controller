@@ -4,6 +4,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/thatsimonsguy/hvac-controller/internal/config"
+	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/logging"
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
 	"github.com/thatsimonsguy/hvac-controller/internal/store"
@@ -16,6 +17,10 @@ func main() {
 	log.Info().
 		Str("state_file", cfg.StateFile).
 		Msg("Starting HVAC controller")
+
+	if err := gpio.ValidateStartupPins(cfg); err != nil {
+		log.Fatal().Err(err).Msg("Refusing to enable relay board due to unsafe pin states")
+	}
 
 	st := store.New(cfg.StateFile)
 
