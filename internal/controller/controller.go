@@ -22,6 +22,7 @@ type Controller struct {
 
 	heatPumps            [2]*HeatPump
 	boiler               *Device
+	relayBoard           *Device
 	lastRoleRotation     time.Time
 	roleRotationInterval time.Duration
 }
@@ -53,9 +54,18 @@ func New(cfg config.Config, state *model.SystemState) *Controller {
 		MinOff:      5 * time.Minute,
 	}
 
+	relayBoard := &Device{
+		Name:        "main_enable",
+		Pin:         *cfg.GPIO.MainPowerRelayPin,
+		LastChanged: now,
+		MinOn:       0,
+		MinOff:      0,
+	}
+
 	return &Controller{
-		cfg:   cfg,
-		state: state,
+		cfg:        cfg,
+		state:      state,
+		relayBoard: relayBoard,
 		heatPumps: [2]*HeatPump{
 			{Name: "heat_pump_A", Relay: primaryDevice, Role: "primary"},
 			{Name: "heat_pump_B", Relay: secondaryDevice, Role: "secondary"},
@@ -67,6 +77,10 @@ func New(cfg config.Config, state *model.SystemState) *Controller {
 }
 
 func (c *Controller) Run(ctx context.Context) {
+	log.Info().Msg("Enabling main power relay")
+	c.relayBoard.TurnOn(time.Now())
+	defer c.relayBoard.TurnOff(time.Now())
+
 	ticker := time.NewTicker(time.Duration(c.cfg.PollIntervalSeconds) * time.Second)
 	defer ticker.Stop()
 
