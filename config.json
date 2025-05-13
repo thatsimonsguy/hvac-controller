@@ -7,10 +7,19 @@
     "role_rotation_minutes": 1440,
     "poll_interval_seconds": 30,
     "gpio": {
+        "main_floor_temp_sensor": 5,
+        "basement_temp_sensor": 6,
+        "garage_temp_sensor": 12,
+        "main_floor_air_blower": 13,
+        "main_floor_air_pump": 16,
+        "basement_air_blower": 19,
+        "basement_air_pump": 20,
+        "basement_radiant_pump": 21,
+        "garage_radiant_pump": 26,
         "boiler_relay": 17,
         "heat_pump_A_relay": 27,
         "heat_pump_B_relay": 22,
         "buffer_temp_sensor": 4,
-        "main_power_relay": 5
+        "main_power_relay": 23
     }
 }
