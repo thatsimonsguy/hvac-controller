@@ -20,6 +20,7 @@ type Config struct {
 	StateFile  string
 	ConfigFile string
 	LogLevel   zerolog.Level
+	SafeMode bool `json:"safe_mode"`
 
 	HeatingThreshold float64 `json:"heating_threshold"`
 	CoolingThreshold float64 `json:"cooling_threshold"`
@@ -40,10 +41,11 @@ func Load() Config {
 	flag.StringVar(&cfg.StateFile, "state-file", "data/state.json", "Path to system state file")
 	flag.StringVar(&cfg.ConfigFile, "config-file", "config.json", "Path to controller config file")
 	flag.StringVar(&logLevel, "log-level", "info", "Log level (debug, info, warn, error)")
+	flag.BoolVar(&cfg.SafeMode, "safe-mode", true, "Run without energizing relays or controlling GPIO")
 	flag.Parse()
 
 	cfg.LogLevel = parseLogLevel(logLevel)
-
+	
 	file, err := os.Open(cfg.ConfigFile)
 	if err != nil {
 		panic("Failed to load config file: " + err.Error())
