@@ -7,19 +7,61 @@
     "role_rotation_minutes": 1440,
     "poll_interval_seconds": 30,
     "gpio": {
-        "main_floor_temp_sensor": 5,
-        "basement_temp_sensor": 6,
-        "garage_temp_sensor": 12,
-        "main_floor_air_blower": 13,
-        "main_floor_air_pump": 16,
-        "basement_air_blower": 19,
-        "basement_air_pump": 20,
-        "basement_radiant_pump": 21,
-        "garage_radiant_pump": 26,
-        "boiler_relay": 17,
-        "heat_pump_A_relay": 27,
-        "heat_pump_B_relay": 22,
-        "buffer_temp_sensor": 4,
-        "main_power_relay": 23
+        "main_floor_temp_sensor": {
+            "pin": 5,
+            "safe_state": true
+        },
+        "basement_temp_sensor": {
+            "pin": 6,
+            "safe_state": true
+        },
+        "garage_temp_sensor": {
+            "pin": 12,
+            "safe_state": true
+        },
+        "main_floor_air_blower": {
+            "pin": 13,
+            "safe_state": true
+        },
+        "main_floor_air_pump": {
+            "pin": 16,
+            "safe_state": true
+        },
+        "basement_air_blower": {
+            "pin": 19,
+            "safe_state": true
+        },
+        "basement_air_pump": {
+            "pin": 20,
+            "safe_state": true
+        },
+        "basement_radiant_pump": {
+            "pin": 21,
+            "safe_state": true
+        },
+        "garage_radiant_pump": {
+            "pin": 26,
+            "safe_state": true
+        },
+        "boiler_relay": {
+            "pin": 17,
+            "safe_state": true
+        },
+        "heat_pump_A_relay": {
+            "pin": 27,
+            "safe_state": true
+        },
+        "heat_pump_B_relay": {
+            "pin": 22,
+            "safe_state": true
+        },
+        "buffer_temp_sensor": {
+            "pin": 4,
+            "safe_state": true
+        },
+        "main_power_relay": {
+            "pin": 23,
+            "safe_state": false
+        }
     }
 }
