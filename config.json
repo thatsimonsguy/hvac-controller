@@ -12,43 +12,43 @@
             "safe_state": null
         },
         "main_floor_air_blower": {
-            "pin": 13,
+            "pin": 5,
             "safe_state": true
         },
         "main_floor_air_pump": {
-            "pin": 16,
+            "pin": 6,
             "safe_state": true
         },
         "basement_air_blower": {
-            "pin": 19,
+            "pin": 12,
             "safe_state": true
         },
         "basement_air_pump": {
-            "pin": 20,
+            "pin": 13,
             "safe_state": true
         },
         "basement_radiant_pump": {
-            "pin": 21,
+            "pin": 16,
             "safe_state": true
         },
         "garage_radiant_pump": {
-            "pin": 26,
-            "safe_state": true
-        },
-        "boiler_relay": {
             "pin": 17,
             "safe_state": true
         },
-        "heat_pump_A_relay": {
-            "pin": 27,
-            "safe_state": true
-        },
-        "heat_pump_B_relay": {
+        "boiler_relay": {
             "pin": 22,
             "safe_state": true
         },
-        "main_power_relay": {
+        "heat_pump_A_relay": {
             "pin": 23,
+            "safe_state": true
+        },
+        "heat_pump_B_relay": {
+            "pin": 24,
+            "safe_state": true
+        },
+        "main_power_relay": {
+            "pin": 25,
             "safe_state": false
         }
     },
