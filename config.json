@@ -1,6 +1,6 @@
 {
-    "heating_threshold": 120.0,
-    "cooling_threshold": 45.0,
+    "heating_threshold": 105.0,
+    "cooling_threshold": 38.0,
     "spread": 5.0,
     "secondary_margin": 10.0,
     "tertiary_margin": 30.0,
@@ -43,8 +43,16 @@
             "pin": 23,
             "safe_state": true
         },
+        "heat_pump_A_mode": {
+            "pin": 18,
+            "safe_state": true
+        },
         "heat_pump_B_relay": {
             "pin": 24,
+            "safe_state": true
+        },
+        "heat_pump_B_mode": {
+            "pin": 19,
             "safe_state": true
         },
         "main_power_relay": {
