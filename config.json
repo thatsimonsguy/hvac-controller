@@ -1,66 +1,182 @@
 {
-    "heating_threshold": 105.0,
-    "cooling_threshold": 38.0,
-    "spread": 5.0,
-    "secondary_margin": 10.0,
-    "tertiary_margin": 30.0,
-    "role_rotation_minutes": 1440,
-    "poll_interval_seconds": 30,
-    "gpio": {
-        "temp_sensor_bus": {
-            "pin": 4,
-            "safe_state": null
-        },
-        "main_floor_air_blower": {
-            "pin": 5,
-            "safe_state": true
-        },
-        "main_floor_air_pump": {
-            "pin": 6,
-            "safe_state": true
-        },
-        "basement_air_blower": {
-            "pin": 12,
-            "safe_state": true
-        },
-        "basement_air_pump": {
-            "pin": 13,
-            "safe_state": true
-        },
-        "basement_radiant_pump": {
-            "pin": 16,
-            "safe_state": true
-        },
-        "garage_radiant_pump": {
-            "pin": 17,
-            "safe_state": true
-        },
-        "boiler_relay": {
-            "pin": 22,
-            "safe_state": true
-        },
-        "heat_pump_A_relay": {
-            "pin": 23,
-            "safe_state": true
-        },
-        "heat_pump_A_mode": {
-            "pin": 18,
-            "safe_state": true
-        },
-        "heat_pump_B_relay": {
-            "pin": 24,
-            "safe_state": true
-        },
-        "heat_pump_B_mode": {
-            "pin": 19,
-            "safe_state": true
-        },
-        "main_power_relay": {
-            "pin": 25,
-            "safe_state": false
-        }
+  "heating_threshold": 105.0,
+  "cooling_threshold": 38.0,
+  "spread": 5.0,
+  "secondary_margin": 10.0,
+  "tertiary_margin": 30.0,
+  "role_rotation_minutes": 1440,
+  "poll_interval_seconds": 30,
+  "temp_sensor_bus_gpio": 4,
+  "zones": [
+    {
+      "id": "main_floor",
+      "label": "Main Floor",
+      "default_setpoint": 70,
+      "capabilities": [
+        "heating",
+        "cooling",
+        "fan"
+      ],
+      "sensor": {
+        "id": "main_floor_sensor",
+        "bus": "28-xxxxxxxx"
+      }
     },
-    "sensors": {
-        "TODO": "ADD SENSORS"
+    {
+      "id": "basement",
+      "label": "Basement",
+      "default_setpoint": 70,
+      "capabilities": [
+        "heating",
+        "cooling",
+        "fan"
+      ],
+      "sensor": {
+        "id": "basement_sensor",
+        "bus": "28-yyyyyyyy"
+      }
+    },
+    {
+      "id": "garage",
+      "label": "Garage",
+      "default_setpoint": 55,
+      "capabilities": [
+        "heating"
+      ],
+      "sensor": {
+        "id": "garage_sensor",
+        "bus": "28-zzzzzzzz"
+      }
     }
+  ],
+  "devices": [
+    {
+      "id": "main_floor_air_blower",
+      "type": "blower",
+      "pin": 5,
+      "active_modes": [
+        "heating",
+        "cooling",
+        "fan"
+      ],
+      "zone_id": "main_floor",
+      "relay_coil_off": "dh"
+    },
+    {
+      "id": "main_floor_air_pump",
+      "type": "pump",
+      "pin": 6,
+      "active_modes": [
+        "heating",
+        "cooling"
+      ],
+      "zone_id": "main_floor",
+      "relay_coil_off": "dh"
+    },
+    {
+      "id": "basement_air_blower",
+      "type": "blower",
+      "pin": 12,
+      "active_modes": [
+        "heating",
+        "cooling",
+        "fan"
+      ],
+      "zone_id": "basement",
+      "relay_coil_off": "dh"
+    },
+    {
+      "id": "basement_air_pump",
+      "type": "pump",
+      "pin": 13,
+      "active_modes": [
+        "heating",
+        "cooling"
+      ],
+      "zone_id": "basement",
+      "relay_coil_off": "dh"
+    },
+    {
+      "id": "basement_radiant_pump",
+      "type": "pump",
+      "pin": 16,
+      "active_modes": [
+        "heating"
+      ],
+      "zone_id": "basement",
+      "relay_coil_off": "dh"
+    },
+    {
+      "id": "garage_radiant_pump",
+      "type": "pump",
+      "pin": 17,
+      "active_modes": [
+        "heating"
+      ],
+      "zone_id": "garage",
+      "relay_coil_off": "dh"
+    },
+    {
+      "id": "boiler_relay",
+      "type": "relay",
+      "pin": 22,
+      "active_modes": [
+        "heating"
+      ],
+      "relay_coil_off": "dh"
+    },
+    {
+      "id": "heat_pump_A_relay",
+      "type": "relay",
+      "pin": 23,
+      "active_modes": [
+        "cooling"
+      ],
+      "relay_coil_off": "dh"
+    },
+    {
+      "id": "heat_pump_A_mode",
+      "type": "mode_switch",
+      "pin": 18,
+      "active_modes": [
+        "cooling"
+      ],
+      "relay_coil_off": "dh"
+    },
+    {
+      "id": "heat_pump_B_relay",
+      "type": "relay",
+      "pin": 24,
+      "active_modes": [
+        "cooling"
+      ],
+      "relay_coil_off": "dh"
+    },
+    {
+      "id": "heat_pump_B_mode",
+      "type": "mode_switch",
+      "pin": 19,
+      "active_modes": [
+        "cooling"
+      ],
+      "relay_coil_off": "dh"
+    },
+    {
+      "id": "main_power_relay",
+      "type": "power",
+      "pin": 25,
+      "active_modes": [
+        "heating",
+        "cooling",
+        "fan"
+      ],
+      "relay_coil_off": "dl"
+    }
+  ],
+  "system_sensors": {
+    "buffer_tank": {
+      "id": "buffer_tank",
+      "bus": "28-aaaaaaaa"
+    }
+  }
 }
