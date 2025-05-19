@@ -16,6 +16,7 @@ type Zone struct {
 	Label        string   `json:"label"`
 	Setpoint     float64  `json:"setpoint"`
 	Capabilities []string `json:"capabilities"` // e.g. ["heating", "cooling"]
+	Sensor Sensor `json:"sensor"`
 }
 
 type Device struct {
@@ -59,4 +60,9 @@ type SystemState struct {
 	SystemMode SystemMode `json:"system_mode"`
 	Zones      []Zone     `json:"zones"`
 	Devices    []Device   `json:"devices"`
+}
+
+type Sensor struct {
+	ID  string `json:"id"`
+	Bus string `json:"bus"`
 }

@@ -15,7 +15,7 @@
     {
       "id": "main_floor",
       "label": "Main Floor",
-      "default_setpoint": 70,
+      "setpoint": 70,
       "capabilities": [
         "heating",
         "cooling",
@@ -29,7 +29,7 @@
     {
       "id": "basement",
       "label": "Basement",
-      "default_setpoint": 70,
+      "setpoint": 70,
       "capabilities": [
         "heating",
         "cooling",
@@ -43,7 +43,7 @@
     {
       "id": "garage",
       "label": "Garage",
-      "default_setpoint": 55,
+      "setpoint": 55,
       "capabilities": [
         "heating"
       ],
