@@ -2,106 +2,104 @@ package gpio
 
 import (
 	"fmt"
-	"sync"
 
-	"github.com/rs/zerolog/log"
-	"github.com/thatsimonsguy/hvac-controller/internal/config"
+	"github.com/thatsimonsguy/hvac-controller/internal/pinctrl"
+
+	"github.com/thatsimonsguy/hvac-controller/internal/model"
+	"github.com/thatsimonsguy/hvac-controller/internal/state"
 )
 
-var (
-	mu              sync.RWMutex
-	state           = make(map[int]bool)
-	safeModeEnabled bool
+var safeMode bool
 
-	setFn  = defaultSet
-	readFn = defaultRead
-)
-
-func SetSafeMode(enabled bool) {
-	safeModeEnabled = enabled
-}
-
-// Set energizes or de-energizes a GPIO pin (true = ON)
-func Set(pin int, on bool) {
-	if safeModeEnabled {
-		log.Warn().
-			Int("pin", pin).
-			Bool("requested_state", on).
-			Msg("Safe mode enabled — skipping Set()")
-		return
+func ValidateInitialPinStates(state *state.SystemState) error {
+	type pinWithMeta struct {
+		Name       string
+		Pin        model.GPIOPin
+		ShouldBeOn bool
 	}
-	setFn(pin, on)
-}
 
-// Read returns true if the GPIO pin is currently energized
-func Read(pin int) bool {
-	return readFn(pin)
-}
+	var checks []pinWithMeta
 
-// --- Default backend ---
+	for _, hp := range state.HeatPumps {
+		checks = append(checks, pinWithMeta{
+			Name:       hp.Name,
+			Pin:        hp.Pin,
+			ShouldBeOn: false,
+		})
 
-func defaultSet(pin int, on bool) {
-	mu.Lock()
-	defer mu.Unlock()
-	state[pin] = on
-}
+		modeActive := contains(hp.Device.ActiveModes, string(state.SystemMode)) &&
+			state.SystemMode == model.ModeCooling && hp.Device.Online
 
-func defaultRead(pin int) bool {
-	mu.RLock()
-	defer mu.RUnlock()
-	return state[pin]
-}
+		checks = append(checks, pinWithMeta{
+			Name:       hp.Name + ".mode_pin",
+			Pin:        hp.ModePin,
+			ShouldBeOn: modeActive,
+		})
+	}
 
-func ValidateStartupPins(cfg config.Config) error {
-	var violations []string
+	for _, ah := range state.AirHandlers {
+		checks = append(checks,
+			pinWithMeta{ah.Name, ah.Pin, false},
+			pinWithMeta{ah.Name + ".circ_pump", ah.CircPumpPin, false},
+		)
+	}
+	for _, b := range state.Boilers {
+		checks = append(checks, pinWithMeta{b.Name, b.Pin, false})
+	}
+	for _, rf := range state.RadiantLoops {
+		checks = append(checks, pinWithMeta{rf.Name, rf.Pin, false})
+	}
 
-	for name, pinDef := range cfg.GPIO {
-		if pinDef.SafeState == nil {
-			log.Debug().Str("pin", name).Msg("Skipping safe state check for unmanaged pin")
-			continue
+	checks = append(checks, pinWithMeta{"main_power", state.MainPowerPin, false})
+
+	for _, check := range checks {
+		level, err := pinctrl.ReadLevel(check.Pin.Number)
+		if err != nil {
+			return fmt.Errorf("failed to read pin level for %s (GPIO %d): %w", check.Name, check.Pin.Number, err)
 		}
-
-		actual := Read(pinDef.Pin)
-		if actual != *pinDef.SafeState {
-			violations = append(violations,
-				fmt.Sprintf("pin %d (gpio.%s) is %v but expected %v",
-					pinDef.Pin, name, actual, pinDef.SafeState))
+		isActive := (check.Pin.ActiveHigh && level) || (!check.Pin.ActiveHigh && !level)
+		if isActive != check.ShouldBeOn {
+			return fmt.Errorf("pin %d (%s) is in wrong state at startup (expected active=%v)", check.Pin.Number, check.Name, check.ShouldBeOn)
 		}
 	}
 
-	if len(violations) > 0 {
-		for _, v := range violations {
-			log.Error().Msg(v)
-		}
-		return fmt.Errorf("unsafe GPIO pin states at startup")
-	}
-
-	log.Info().Msg("All GPIO pins match safe state config at startup")
 	return nil
 }
 
-func GetPin(cfg config.Config, key string) int {
-	pinDef, ok := cfg.GPIO[key]
-	if !ok {
-		panic(fmt.Sprintf("GPIO config missing for key: %s", key))
+func contains(list []string, val string) bool {
+	for _, s := range list {
+		if s == val {
+			return true
+		}
 	}
-	return pinDef.Pin
+	return false
 }
 
-// --- Testing hooks ---
 
-// MockGPIO overrides the Set and Read logic for tests
-func MockGPIO(set func(int, bool), read func(int) bool) {
-	setFn = set
-	readFn = read
+func SetSafeMode(enabled bool) {
+	safeMode = enabled
 }
 
-// ResetGPIO resets the internal GPIO state and restores default behavior
-func ResetGPIO() {
-	mu.Lock()
-	defer mu.Unlock()
+func Read(pin model.GPIOPin) (bool, error) {
+	return pinctrl.ReadLevel(pin.Number)
+}
 
-	state = make(map[int]bool)
-	setFn = defaultSet
-	readFn = defaultRead
+func Activate(pin model.GPIOPin) error {
+	if safeMode {
+		return nil
+	}
+	if pin.ActiveHigh {
+		return pinctrl.SetPin(pin.Number, "op", "pn", "dh")
+	}
+	return pinctrl.SetPin(pin.Number, "op", "pn", "dl")
+}
+
+func Deactivate(pin model.GPIOPin) error {
+	if safeMode {
+		return nil
+	}
+	if pin.ActiveHigh {
+		return pinctrl.SetPin(pin.Number, "op", "pn", "dl")
+	}
+	return pinctrl.SetPin(pin.Number, "op", "pn", "dh")
 }

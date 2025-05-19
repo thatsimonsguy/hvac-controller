@@ -19,7 +19,7 @@ type SystemState struct {
 	RadiantLoops     []model.RadiantFloorLoop    `json:"radiant_loops"`
 	MainPowerPin     model.GPIOPin               `json:"main_power_pin"`
 	TempSensorBusPin int                         `json:"temp_sensor_bus_pin"`
-	SystemSensors    map[string]config.Sensor    `json:"system_sensors"`
+	SystemSensors    map[string]model.Sensor    `json:"system_sensors"`
 }
 
 func NewSystemStateFromConfig(cfg *config.Config) *SystemState {
@@ -73,7 +73,7 @@ func hydrateZones(cfg *config.Config) []model.Zone {
 		zones = append(zones, model.Zone{
 			ID:           z.ID,
 			Label:        z.Label,
-			Setpoint:     z.DefaultSetpoint,
+			Setpoint:     z.Setpoint,
 			Capabilities: z.Capabilities,
 		})
 	}
@@ -107,17 +107,8 @@ func hydrateHeatPumps(cfg *config.Config) []model.HeatPump {
 func hydrateAirHandlers(cfg *config.Config) []model.AirHandler {
 	ahProfile := cfg.DeviceConfig.AirHandlers.DeviceProfile
 	ahList := make([]model.AirHandler, 0, len(cfg.DeviceConfig.AirHandlers.Devices))
-	zoneLookup := make(map[string]*model.Zone)
-	for i := range cfg.Zones {
-		zone := &cfg.Zones[i]
-		zoneLookup[zone.ID] = &model.Zone{
-			ID:           zone.ID,
-			Label:        zone.Label,
-			Setpoint:     zone.DefaultSetpoint,
-			Capabilities: zone.Capabilities,
-		}
-	}
-
+	zoneLookup := buildZoneLookup(cfg)
+	
 	for _, ah := range cfg.DeviceConfig.AirHandlers.Devices {
 		zone := zoneLookup[ah.Zone]
 		ahList = append(ahList, model.AirHandler{
@@ -158,16 +149,7 @@ func hydrateBoilers(cfg *config.Config) []model.Boiler {
 func hydrateRadiantLoops(cfg *config.Config) []model.RadiantFloorLoop {
 	rfProfile := cfg.DeviceConfig.RadiantFloorLoops.DeviceProfile
 	rfList := make([]model.RadiantFloorLoop, 0, len(cfg.DeviceConfig.RadiantFloorLoops.Devices))
-	zoneLookup := make(map[string]*model.Zone)
-	for i := range cfg.Zones {
-		zone := &cfg.Zones[i]
-		zoneLookup[zone.ID] = &model.Zone{
-			ID:           zone.ID,
-			Label:        zone.Label,
-			Setpoint:     zone.DefaultSetpoint,
-			Capabilities: zone.Capabilities,
-		}
-	}
+	zoneLookup := buildZoneLookup(cfg)
 
 	for _, rf := range cfg.DeviceConfig.RadiantFloorLoops.Devices {
 		zone := zoneLookup[rf.Zone]
@@ -184,4 +166,24 @@ func hydrateRadiantLoops(cfg *config.Config) []model.RadiantFloorLoop {
 		})
 	}
 	return rfList
+}
+
+// Helper: create a map of zone ID to pointer
+func buildZoneLookup(cfg *config.Config) map[string]*model.Zone {
+	zoneLookup := make(map[string]*model.Zone)
+	for i := range cfg.Zones {
+		z := &cfg.Zones[i]
+		zoneLookup[z.ID] = &model.Zone{
+			ID:           z.ID,
+			Label:        z.Label,
+			Setpoint:     z.Setpoint,
+			Capabilities: z.Capabilities,
+		}
+	}
+	return zoneLookup
+}
+
+// Helper: convert duration minutes to time.Duration
+func minDur(mins int) time.Duration {
+	return time.Duration(mins) * time.Minute
 }

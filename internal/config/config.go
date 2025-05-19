@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/rs/zerolog"
+	"github.com/thatsimonsguy/hvac-controller/internal/model"
 )
 
 type GPIOPin struct {
@@ -18,10 +19,10 @@ type GPIO map[string]*GPIOPin
 type Sensors map[string]string // e.g. "garage_temp" => "28-xxxxxx"
 
 type Config struct {
-	StateFile  string
-	ConfigFile string
-	LogLevel   zerolog.Level
-	SafeMode   bool `json:"safe_mode"`
+	ConfigFile    string
+	StateFilePath string `json:"state_file_path"`
+	LogLevel      zerolog.Level
+	SafeMode      bool `json:"safe_mode"`
 
 	HeatingThreshold float64 `json:"heating_threshold"`
 	CoolingThreshold float64 `json:"cooling_threshold"`
@@ -32,37 +33,103 @@ type Config struct {
 	RoleRotationMinutes int `json:"role_rotation_minutes"`
 	PollIntervalSeconds int `json:"poll_interval_seconds"`
 
-	GPIO GPIO `json:"gpio"`
+	TempSensorBusGPIO    int  `json:"temp_sensor_bus_gpio"`
+	MainPowerGPIO        int  `json:"main_power_gpio"`
+	MainPowerActiveHigh  bool `json:"main_power_active_high"`
+	RelayBoardActiveHigh bool `json:"relay_board_active_high"`
+
+	Zones         []model.Zone            `json:"zones"`
+	DeviceConfig  DeviceConfig            `json:"devices"`
+	SystemSensors map[string]model.Sensor `json:"system_sensors"`
 }
 
-func Load() Config {
-	var cfg Config
-	var logLevel string
+// DeviceConfig and related structs
 
-	flag.StringVar(&cfg.StateFile, "state-file", "data/state.json", "Path to system state file")
-	flag.StringVar(&cfg.ConfigFile, "config-file", "config.json", "Path to controller config file")
+type DeviceConfig struct {
+	HeatPumps         HeatPumpGroup    `json:"heat_pumps"`
+	AirHandlers       AirHandlerGroup  `json:"air_handlers"`
+	Boilers           BoilerGroup      `json:"boilers"`
+	RadiantFloorLoops RadiantLoopGroup `json:"radiant_floor_loops"`
+}
+
+type HeatPumpGroup struct {
+	DeviceProfile DeviceProfile    `json:"device_profile"`
+	Devices       []HeatPumpConfig `json:"devices"`
+}
+
+type AirHandlerGroup struct {
+	DeviceProfile DeviceProfile      `json:"device_profile"`
+	Devices       []AirHandlerConfig `json:"devices"`
+}
+
+type BoilerGroup struct {
+	DeviceProfile DeviceProfile  `json:"device_profile"`
+	Devices       []BoilerConfig `json:"devices"`
+}
+
+type RadiantLoopGroup struct {
+	DeviceProfile DeviceProfile       `json:"device_profile"`
+	Devices       []RadiantLoopConfig `json:"devices"`
+}
+
+type DeviceProfile struct {
+	MinTimeOn   int      `json:"min_time_on"`
+	MinTimeOff  int      `json:"min_time_off"`
+	ActiveModes []string `json:"active_modes"`
+}
+
+type HeatPumpConfig struct {
+	Name    string `json:"name"`
+	Pin     int    `json:"pin"`
+	ModePin int    `json:"mode_pin"`
+}
+
+type AirHandlerConfig struct {
+	Name        string `json:"name"`
+	Pin         int    `json:"pin"`
+	CircPumpPin int    `json:"circ_pump_pin"`
+	Zone        string `json:"zone"`
+}
+
+type BoilerConfig struct {
+	Name string `json:"name"`
+	Pin  int    `json:"pin"`
+}
+
+type RadiantLoopConfig struct {
+	Name string `json:"name"`
+	Pin  int    `json:"pin"`
+	Zone string `json:"zone"`
+}
+
+// Load parses config file and CLI flags
+func Load() *Config {
+	var path string
+	var logLevel string
+	var safeMode bool
+
+	flag.StringVar(&path, "config-file", "config.json", "Path to controller config file")
 	flag.StringVar(&logLevel, "log-level", "info", "Log level (debug, info, warn, error)")
-	flag.BoolVar(&cfg.SafeMode, "safe-mode", true, "Run without energizing relays or controlling GPIO")
+	flag.BoolVar(&safeMode, "safe-mode", false, "Run in dry mode without energizing GPIO")
 	flag.Parse()
 
-	cfg.LogLevel = parseLogLevel(logLevel)
-
-	file, err := os.Open(cfg.ConfigFile)
+	f, err := os.Open(path)
 	if err != nil {
-		panic("Failed to load config file: " + err.Error())
+		panic(fmt.Sprintf("Failed to open config file: %s", err))
 	}
-	defer file.Close()
+	defer f.Close()
 
-	if err := json.NewDecoder(file).Decode(&cfg); err != nil {
-		panic("Failed to parse config file: " + err.Error())
+	var cfg Config
+	if err := json.NewDecoder(f).Decode(&cfg); err != nil {
+		panic(fmt.Sprintf("Failed to parse config file: %s", err))
 	}
 
-	if cfg.PollIntervalSeconds == 0 {
-		cfg.PollIntervalSeconds = 30
-	}
+	cfg.ConfigFile = path
+	cfg.LogLevel = parseLogLevel(logLevel)
+	cfg.SafeMode = safeMode
 
 	cfg.validate()
-	return cfg
+	return &cfg
 }
 
 func parseLogLevel(level string) zerolog.Level {
@@ -79,15 +146,52 @@ func parseLogLevel(level string) zerolog.Level {
 }
 
 func (cfg *Config) validate() {
-	pins := map[int]string{}
+	// Validate unique zone IDs
+	zoneIDs := make(map[string]bool)
+	for _, z := range cfg.Zones {
+		if zoneIDs[z.ID] {
+			panic(fmt.Sprintf("Duplicate zone ID found: %s", z.ID))
+		}
+		zoneIDs[z.ID] = true
+	}
 
-	for name, gpioPin := range cfg.GPIO {
-		if gpioPin == nil {
-			panic("Missing required GPIO config for: gpio." + name)
+	// Validate device zone references
+	for _, ah := range cfg.DeviceConfig.AirHandlers.Devices {
+		if !zoneIDs[ah.Zone] {
+			panic(fmt.Sprintf("Air handler %s references unknown zone ID: %s", ah.Name, ah.Zone))
 		}
-		if other, exists := pins[gpioPin.Pin]; exists {
-			panic(fmt.Sprintf("Conflicting GPIO pin usage: gpio.%s and gpio.%s both use pin %d", name, other, gpioPin.Pin))
+	}
+	for _, rf := range cfg.DeviceConfig.RadiantFloorLoops.Devices {
+		if !zoneIDs[rf.Zone] {
+			panic(fmt.Sprintf("Radiant loop %s references unknown zone ID: %s", rf.Name, rf.Zone))
 		}
-		pins[gpioPin.Pin] = name
+	}
+
+	// Validate GPIO pin uniqueness
+	usedPins := make(map[int]string)
+
+	check := func(pin int, label string) {
+		if existing, exists := usedPins[pin]; exists {
+			panic(fmt.Sprintf("GPIO pin conflict: %s and %s both use pin %d", existing, label, pin))
+		}
+		usedPins[pin] = label
+	}
+
+	check(cfg.TempSensorBusGPIO, "temp_sensor_bus_gpio")
+	check(cfg.MainPowerGPIO, "main_power_gpio")
+
+	for _, hp := range cfg.DeviceConfig.HeatPumps.Devices {
+		check(hp.Pin, hp.Name+".pin")
+		check(hp.ModePin, hp.Name+".mode_pin")
+	}
+	for _, ah := range cfg.DeviceConfig.AirHandlers.Devices {
+		check(ah.Pin, ah.Name+".pin")
+		check(ah.CircPumpPin, ah.Name+".circ_pump_pin")
+	}
+	for _, b := range cfg.DeviceConfig.Boilers.Devices {
+		check(b.Pin, b.Name+".pin")
+	}
+	for _, rf := range cfg.DeviceConfig.RadiantFloorLoops.Devices {
+		check(rf.Pin, rf.Name+".pin")
 	}
 }

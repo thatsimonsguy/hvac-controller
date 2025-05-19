@@ -12,8 +12,7 @@ import (
 	"github.com/thatsimonsguy/hvac-controller/internal/controller"
 	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/logging"
-	"github.com/thatsimonsguy/hvac-controller/internal/model"
-	"github.com/thatsimonsguy/hvac-controller/internal/store"
+	"github.com/thatsimonsguy/hvac-controller/internal/state"
 )
 
 func main() {
@@ -21,7 +20,7 @@ func main() {
 	logging.Init(cfg.LogLevel)
 
 	log.Info().
-		Str("state_file", cfg.StateFile).
+		Str("state_file", cfg.StateFilePath).
 		Msg("Starting HVAC controller")
 
 	gpio.SetSafeMode(cfg.SafeMode)
@@ -29,27 +28,22 @@ func main() {
 		log.Warn().Msg("SAFE MODE ENABLED — GPIO Set() is disabled system-wide")
 	}
 
-	if err := gpio.ValidateStartupPins(cfg); err != nil {
+	systemState, err := state.LoadSystemState(cfg.StateFilePath)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to load existing system state, starting with defaults")
+		systemState = state.NewSystemStateFromConfig(cfg)
+	}
+	
+	log.Info().
+		Str("mode", string(systemState.SystemMode)).
+		Int("zones", len(systemState.Zones)).
+		Msg("Loaded system state")
+
+	if err := gpio.ValidateInitialPinStates(systemState); err != nil {
 		log.Fatal().Err(err).Msg("Refusing to enable relay board due to unsafe pin states")
 	}
 
-	st := store.New(cfg.StateFile)
-
-	state, err := st.Load()
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to load existing system state, starting with defaults")
-		state = &model.SystemState{
-			SystemMode: model.ModeOff,
-			Zones:      []model.Zone{},
-		}
-	}
-
-	log.Info().
-		Str("mode", string(state.SystemMode)).
-		Int("zones", len(state.Zones)).
-		Msg("Loaded system state")
-
-	ctrl := controller.New(cfg, state)
+	ctrl := controller.New(cfg, systemState)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
