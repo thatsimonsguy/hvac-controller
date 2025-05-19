@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 type SystemMode string
 
 const (
@@ -16,7 +18,45 @@ type Zone struct {
 	Capabilities []string `json:"capabilities"` // e.g. ["heating", "cooling"]
 }
 
+type Device struct {
+	Name        string
+	Pin         GPIOPin
+	MinOn       time.Duration // TODO: populate from config
+	MinOff      time.Duration // TODO: populate from config
+	Online      bool
+	LastChanged time.Time
+	ActiveModes []string
+}
+
+type HeatPump struct {
+	Device
+	ModePin     GPIOPin
+	IsPrimary   bool
+	LastRotated time.Time
+}
+
+type Boiler struct {
+	Device
+}
+
+type RadiantFloorLoop struct {
+	Device
+	Zone *Zone
+}
+
+type AirHandler struct {
+	Device
+	Zone        *Zone
+	CircPumpPin GPIOPin
+}
+
+type GPIOPin struct {
+	Number     int
+	ActiveHigh bool
+}
+
 type SystemState struct {
 	SystemMode SystemMode `json:"system_mode"`
 	Zones      []Zone     `json:"zones"`
+	Devices    []Device   `json:"devices"`
 }
