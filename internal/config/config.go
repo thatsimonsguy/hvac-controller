@@ -19,10 +19,12 @@ type GPIO map[string]*GPIOPin
 type Sensors map[string]string // e.g. "garage_temp" => "28-xxxxxx"
 
 type Config struct {
-	ConfigFile    string
-	StateFilePath string `json:"state_file_path"`
-	LogLevel      zerolog.Level
-	SafeMode      bool `json:"safe_mode"`
+	ConfigFile         string
+	StateFilePath      string `json:"state_file_path"`
+	BootScriptFilePath string `json:"boot_script_file_path"`
+	OSServicePath      string `json:"os_service_path"`
+	LogLevel           zerolog.Level
+	SafeMode           bool `json:"safe_mode"`
 
 	HeatingThreshold float64 `json:"heating_threshold"`
 	CoolingThreshold float64 `json:"cooling_threshold"`
