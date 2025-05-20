@@ -3,11 +3,12 @@ package startup
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
+	"github.com/thatsimonsguy/hvac-controller/internal/config"
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
 	"github.com/thatsimonsguy/hvac-controller/internal/state"
-	"github.com/thatsimonsguy/hvac-controller/internal/config"
 )
 
 func WriteStartupScript(cfg *config.Config, state *state.SystemState) error {
@@ -64,6 +65,13 @@ WantedBy=multi-user.target
 `, cfg.BootScriptFilePath)
 
 	return os.WriteFile(cfg.OSServicePath, []byte(unitContents), 0644)
+}
+
+func RunStartupScript(scriptPath string) error {
+	cmd := exec.Command("/bin/bash", scriptPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func contains(list []string, val string) bool {

@@ -12,6 +12,7 @@ import (
 	"github.com/thatsimonsguy/hvac-controller/internal/controller"
 	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/logging"
+	"github.com/thatsimonsguy/hvac-controller/internal/startup"
 	"github.com/thatsimonsguy/hvac-controller/internal/state"
 )
 
@@ -31,9 +32,16 @@ func main() {
 	systemState, err := state.LoadSystemState(cfg.StateFilePath)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to load existing system state, starting with defaults")
-		systemState = state.NewSystemStateFromConfig(cfg)
+		// indicates first run
+		systemState = state.NewSystemStateFromConfig(cfg) // create state file from config
+
+		// write a pinctrl shell script to disk that sets initial pin states, run it now, and install it as a service
+		// context: pin states can float or fluctuate during device boot, so we're setting them as early as possible to their off states via systemd service
+		startup.WriteStartupScript(cfg, systemState)
+		startup.RunStartupScript(cfg.BootScriptFilePath)
+		startup.InstallStartupService(cfg)
 	}
-	
+
 	log.Info().
 		Str("mode", string(systemState.SystemMode)).
 		Int("zones", len(systemState.Zones)).
