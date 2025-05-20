@@ -14,6 +14,7 @@ import (
 	"github.com/thatsimonsguy/hvac-controller/internal/logging"
 	"github.com/thatsimonsguy/hvac-controller/internal/startup"
 	"github.com/thatsimonsguy/hvac-controller/internal/state"
+	"github.com/thatsimonsguy/hvac-controller/internal/model"
 )
 
 func main() {
@@ -49,6 +50,13 @@ func main() {
 
 	if err := gpio.ValidateInitialPinStates(systemState); err != nil {
 		log.Fatal().Err(err).Msg("Refusing to enable relay board due to unsafe pin states")
+	}
+
+	if !cfg.SafeMode {
+		err := gpio.Activate(systemState.MainPowerPin)
+		if err != nil{
+			log.Fatal().Err(err).Msg("Failed to activate relay board power")
+		}
 	}
 
 	ctrl := controller.New(cfg, systemState)

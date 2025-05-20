@@ -1,207 +1,135 @@
 package controller
 
 import (
-	"context"
+	"path/filepath"
 	"time"
 
 	"github.com/rs/zerolog/log"
-
 	"github.com/thatsimonsguy/hvac-controller/internal/config"
 	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
+	"github.com/thatsimonsguy/hvac-controller/internal/state"
 )
 
-type HeatPump struct {
-	Name  string
-	Relay *Device
-	Role  string // "primary" or "secondary"
+type HeatSources struct {
+	Primary   *model.HeatPump
+	Secondary *model.HeatPump
+	Tertiary  *model.Boiler
 }
 
-type Controller struct {
-	cfg   config.Config
-	state *model.SystemState
+func RunBufferController(cfg *config.Config, state *state.SystemState, pollInterval time.Duration) {
+	go func() {
+		log.Info().Msg("Starting buffer tank controller")
+		for {
+			// build current source list
+			sources := assignHeatSourceRoles(cfg, state)
 
-	heatPumps            [2]*HeatPump
-	boiler               *Device
-	relayBoard           *Device
-	lastRoleRotation     time.Time
-	roleRotationInterval time.Duration
+			// get buffer tank temp
+			sensor := state.SystemSensors["buffer_tank"]
+			sensorPath := filepath.Join("/sys/bus/w1/devices", sensor.Bus)
+			bufferTemp, err := gpio.ReadSensorTemp(sensorPath)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to read buffer tank temperature")
+			}
+
+			// read device active states for online devices
+
+			time.Sleep(time.Duration(cfg.PollIntervalSeconds))
+		}
+	}()
 }
 
-func New(cfg config.Config, state *model.SystemState) *Controller {
+func assignHeatSourceRoles(cfg *config.Config, state *state.SystemState) HeatSources {
+	var newPrimary *model.HeatPump
+	var newSecondary *model.HeatPump
+	var newTertiary *model.Boiler
+
+	mode := state.SystemMode
 	now := time.Now()
+	sources := GetHeatSources(state)
 
-	primaryDevice := &Device{
-		Name:        "heat_pump_A",
-		Pin:         gpio.GetPin(cfg, "heat_pump_A_relay"),
-		LastChanged: now,
-		MinOn:       5 * time.Minute,
-		MinOff:      5 * time.Minute,
+	// verify that we have some heat source we can use in our current mode
+	offlineCool := !sources.Primary.Online && !sources.Secondary.Online && mode == model.ModeCooling
+	offlineHeat := !sources.Primary.Online && !sources.Secondary.Online && !sources.Tertiary.Online
+	if offlineCool || offlineHeat {
+		panic("No eligible heat sources are online")
 	}
 
-	secondaryDevice := &Device{
-		Name:        "heat_pump_B",
-		Pin:         gpio.GetPin(cfg, "heat_pump_B_relay"),
-		LastChanged: now,
-		MinOn:       5 * time.Minute,
-		MinOff:      5 * time.Minute,
-	}
-
-	boiler := &Device{
-		Name:        "boiler",
-		Pin:         gpio.GetPin(cfg, "boiler_relay"),
-		LastChanged: now,
-		MinOn:       5 * time.Minute,
-		MinOff:      5 * time.Minute,
-	}
-
-	relayBoard := &Device{
-		Name:        "main_enable",
-		Pin:         gpio.GetPin(cfg, "main_power_relay"),
-		LastChanged: now,
-		MinOn:       0,
-		MinOff:      0,
-	}
-
-	return &Controller{
-		cfg:        cfg,
-		state:      state,
-		relayBoard: relayBoard,
-		heatPumps: [2]*HeatPump{
-			{Name: "heat_pump_A", Relay: primaryDevice, Role: "primary"},
-			{Name: "heat_pump_B", Relay: secondaryDevice, Role: "secondary"},
-		},
-		boiler:               boiler,
-		lastRoleRotation:     now,
-		roleRotationInterval: time.Duration(cfg.RoleRotationMinutes) * time.Minute,
-	}
-}
-
-func (c *Controller) Run(ctx context.Context) {
-	log.Info().Msg("Enabling main power relay")
-	c.relayBoard.TurnOn(time.Now())
-	defer c.relayBoard.TurnOff(time.Now())
-
-	ticker := time.NewTicker(time.Duration(c.cfg.PollIntervalSeconds) * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Info().Msg("Shutting down controller loop")
-			return
-		case <-ticker.C:
-			c.evaluate()
+	// happy path: both heat pumps online
+	if sources.Primary.Online && sources.Secondary.Online {
+		if now.Sub(sources.Primary.LastRotated) > time.Duration(cfg.RoleRotationMinutes)*time.Minute {
+			log.Info().Msgf("Rotating heat pump primary from %s to %s", sources.Primary.Name, sources.Secondary.Name)
+			sources.Primary.IsPrimary = false
+			sources.Secondary.IsPrimary = true
+			sources.Primary.LastRotated = now
+			sources.Secondary.LastRotated = now
+			newPrimary = sources.Secondary
+			newSecondary = sources.Primary
+		} else {
+			newPrimary = sources.Primary
+			newSecondary = sources.Secondary
 		}
 	}
-}
 
-func (c *Controller) evaluate() {
-	mode := c.state.SystemMode
-	temp := c.readBufferTemp()
-	now := time.Now()
-
-	if now.Sub(c.lastRoleRotation) >= c.roleRotationInterval {
-		c.rotateHeatPumpRoles()
-		c.lastRoleRotation = now
+	// one heat pump offline
+	if sources.Primary.Online != sources.Secondary.Online {
+		if sources.Primary.Online {
+			newPrimary = sources.Primary
+		} else {
+			newPrimary = sources.Secondary
+		}
+		newSecondary = nil
 	}
 
-	log.Debug().
-		Str("mode", string(mode)).
-		Float64("temp", temp).
-		Msg("Evaluating buffer tank status")
-
-	switch mode {
-	case model.ModeHeating:
-		c.handleHeating(temp, now)
-	case model.ModeCooling:
-		c.handleCooling(temp, now)
-	case model.ModeCirculate, model.ModeOff:
-		c.turnEverythingOff(now)
+	// both heat pumps offline
+	if !sources.Primary.Online && !sources.Secondary.Online {
+		newPrimary = nil
+		newSecondary = nil
 	}
-}
 
-func (c *Controller) handleHeating(temp float64, now time.Time) {
-	t1 := c.cfg.HeatingThreshold
-	t2 := t1 - c.cfg.SecondaryMargin
-	t3 := t1 - c.cfg.TertiaryMargin
-	offLimit := t1 + c.cfg.Spread
+	if mode == model.ModeCooling || sources.Tertiary == nil || !sources.Tertiary.Online {
+		newTertiary = nil
+	} else {
+		newTertiary = sources.Tertiary
+	}
 
-	primary := c.getPrimary().Relay
-	secondary := c.getSecondary().Relay
-
-	switch {
-	case temp <= t3:
-		c.boiler.TurnOn(now)
-		secondary.TurnOn(now)
-		primary.TurnOn(now)
-	case temp <= t2:
-		c.boiler.TurnOff(now)
-		secondary.TurnOn(now)
-		primary.TurnOn(now)
-	case temp <= t1:
-		c.boiler.TurnOff(now)
-		secondary.TurnOff(now)
-		primary.TurnOn(now)
-	case temp >= offLimit:
-		c.turnEverythingOff(now)
+	return HeatSources{
+		Primary:   newPrimary,
+		Secondary: newSecondary,
+		Tertiary:  newTertiary,
 	}
 }
 
-func (c *Controller) handleCooling(temp float64, now time.Time) {
-	t1 := c.cfg.CoolingThreshold
-	t2 := t1 + c.cfg.SecondaryMargin
-	offLimit := t1 - c.cfg.Spread
-
-	primary := c.getPrimary().Relay
-	secondary := c.getSecondary().Relay
-
-	switch {
-	case temp >= t2:
-		secondary.TurnOn(now)
-		primary.TurnOn(now)
-	case temp >= t1:
-		secondary.TurnOff(now)
-		primary.TurnOn(now)
-	case temp <= offLimit:
-		c.turnEverythingOff(now)
-	}
+func RunZoneController(zone model.Zone, state *state.SystemState, pollInterval time.Duration) {
+	go func() {
+		log.Info().Str("zone", zone.ID).Msg("Starting zone controller")
+		for {
+			// TODO: Read zone temp, compare to setpoint, activate/deactivate loop or air handler
+			time.Sleep(pollInterval)
+		}
+	}()
 }
 
-func (c *Controller) turnEverythingOff(now time.Time) {
-	c.getPrimary().Relay.TurnOff(now)
-	c.getSecondary().Relay.TurnOff(now)
-	c.boiler.TurnOff(now)
-}
+func GetHeatSources(state *state.SystemState) HeatSources {
+	var primary *model.HeatPump
+	var secondary *model.HeatPump
+	var tertiary *model.Boiler
 
-func (c *Controller) getPrimary() *HeatPump {
-	for _, hp := range c.heatPumps {
-		if hp.Role == "primary" {
-			return hp
+	for i := range state.HeatPumps {
+		hp := &state.HeatPumps[i]
+		if hp.IsPrimary {
+			primary = hp
+		} else {
+			secondary = hp
 		}
 	}
-	return nil
-}
-
-func (c *Controller) getSecondary() *HeatPump {
-	for _, hp := range c.heatPumps {
-		if hp.Role == "secondary" {
-			return hp
-		}
+	if len(state.Boilers) > 0 {
+		tertiary = &state.Boilers[0]
 	}
-	return nil
-}
 
-func (c *Controller) rotateHeatPumpRoles() {
-	c.heatPumps[0].Role, c.heatPumps[1].Role = c.heatPumps[1].Role, c.heatPumps[0].Role
-	log.Info().
-		Str("now_primary", c.getPrimary().Name).
-		Str("now_secondary", c.getSecondary().Name).
-		Msg("Rotated heat pump roles")
-}
-
-func (c *Controller) readBufferTemp() float64 {
-	// TODO: replace with GPIO sensor read
-	now := time.Now().Unix()
-	return 110.0 + float64(now%30) // cycles between 110–139
+	return HeatSources{
+		Primary:   primary,
+		Secondary: secondary,
+		Tertiary:  tertiary,
+	}
 }

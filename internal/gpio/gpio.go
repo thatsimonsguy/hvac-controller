@@ -2,6 +2,8 @@ package gpio
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/thatsimonsguy/hvac-controller/internal/pinctrl"
 
@@ -109,4 +111,19 @@ func CurrentlyActive(pin model.GPIOPin) (bool, error) {
 		return false, err
 	}
 	return pin.ActiveHigh == level, nil
+}
+
+// ReadSensorTemp reads the last converted temperature value for a given sensor
+func ReadSensorTemp(sensorPath string) (float64, error) {
+	file := filepath.Join(sensorPath, "w1_slave")
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read sensor data: %w", err)
+	}
+	var tempMilliC int
+	_, err = fmt.Sscanf(string(data), "%*s %*s %*s %*s %*s %*s %*s %*s %*s t=%d", &tempMilliC)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse temperature: %w", err)
+	}
+	return float64(tempMilliC) / 1000.0, nil
 }
