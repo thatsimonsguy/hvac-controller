@@ -11,15 +11,15 @@ import (
 )
 
 type SystemState struct {
-	SystemMode       model.SystemMode            `json:"system_mode"`
-	Zones            []model.Zone                `json:"zones"`
-	HeatPumps        []model.HeatPump            `json:"heat_pumps"`
-	AirHandlers      []model.AirHandler          `json:"air_handlers"`
-	Boilers          []model.Boiler              `json:"boilers"`
-	RadiantLoops     []model.RadiantFloorLoop    `json:"radiant_loops"`
-	MainPowerPin     model.GPIOPin               `json:"main_power_pin"`
-	TempSensorBusPin int                         `json:"temp_sensor_bus_pin"`
-	SystemSensors    map[string]model.Sensor    `json:"system_sensors"`
+	SystemMode       model.SystemMode         `json:"system_mode"`
+	Zones            []model.Zone             `json:"zones"`
+	HeatPumps        []model.HeatPump         `json:"heat_pumps"`
+	AirHandlers      []model.AirHandler       `json:"air_handlers"`
+	Boilers          []model.Boiler           `json:"boilers"`
+	RadiantLoops     []model.RadiantFloorLoop `json:"radiant_loops"`
+	MainPowerPin     model.GPIOPin            `json:"main_power_pin"`
+	TempSensorBusPin int                      `json:"temp_sensor_bus_pin"`
+	SystemSensors    map[string]model.Sensor  `json:"system_sensors"`
 }
 
 func NewSystemStateFromConfig(cfg *config.Config) *SystemState {
@@ -108,7 +108,7 @@ func hydrateAirHandlers(cfg *config.Config) []model.AirHandler {
 	ahProfile := cfg.DeviceConfig.AirHandlers.DeviceProfile
 	ahList := make([]model.AirHandler, 0, len(cfg.DeviceConfig.AirHandlers.Devices))
 	zoneLookup := buildZoneLookup(cfg)
-	
+
 	for _, ah := range cfg.DeviceConfig.AirHandlers.Devices {
 		zone := zoneLookup[ah.Zone]
 		ahList = append(ahList, model.AirHandler{

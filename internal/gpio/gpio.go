@@ -75,7 +75,6 @@ func contains(list []string, val string) bool {
 	return false
 }
 
-
 func SetSafeMode(enabled bool) {
 	safeMode = enabled
 }
