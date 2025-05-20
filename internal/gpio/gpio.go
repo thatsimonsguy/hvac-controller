@@ -102,3 +102,11 @@ func Deactivate(pin model.GPIOPin) error {
 	}
 	return pinctrl.SetPin(pin.Number, "op", "pn", "dh")
 }
+
+func CurrentlyActive(pin model.GPIOPin) (bool, error) {
+	level, err := Read(pin)
+	if err != nil {
+		return false, err
+	}
+	return pin.ActiveHigh == level, nil
+}
