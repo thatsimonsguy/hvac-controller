@@ -56,12 +56,6 @@ type GPIOPin struct {
 	ActiveHigh bool
 }
 
-type SystemState struct {
-	SystemMode SystemMode `json:"system_mode"`
-	Zones      []Zone     `json:"zones"`
-	Devices    []Device   `json:"devices"`
-}
-
 type Sensor struct {
 	ID  string `json:"id"`
 	Bus string `json:"bus"`
