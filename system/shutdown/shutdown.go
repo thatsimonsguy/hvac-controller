@@ -8,6 +8,9 @@ import (
 	"github.com/thatsimonsguy/hvac-controller/internal/pinctrl"
 )
 
+// Overridable for tests
+var ExitFunc = os.Exit
+
 func Shutdown() {
 	if !env.Cfg.SafeMode {
 		if env.Cfg.MainPowerActiveHigh {
@@ -16,7 +19,7 @@ func Shutdown() {
 			pinctrl.SetPin(env.Cfg.MainPowerGPIO, "op", "pn", "dh")
 		}
 		log.Info().Msg("Main power relay deactivated")
-		os.Exit(0)
+		ExitFunc(0)
 	}
 }
 
