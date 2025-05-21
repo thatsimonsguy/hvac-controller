@@ -26,11 +26,15 @@ type Config struct {
 	LogLevel           zerolog.Level
 	SafeMode           bool `json:"safe_mode"`
 
-	HeatingThreshold float64 `json:"heating_threshold"`
-	CoolingThreshold float64 `json:"cooling_threshold"`
-	Spread           float64 `json:"spread"`
-	SecondaryMargin  float64 `json:"secondary_margin"`
-	TertiaryMargin   float64 `json:"tertiary_margin"`
+	HeatingThreshold      float64 `json:"heating_threshold"`
+	CoolingThreshold      float64 `json:"cooling_threshold"`
+	ZoneMaxTemp           float64 `json:"zone_max_temp"`
+	ZoneMinTemp           float64 `json:"zone_min_temp"`
+	SystemOverrideMaxTemp float64 `json:"system_override_max_temp"` // TODO create async system protection override handler that heats
+	SystemOverrideMinTemp float64 `json:"system_override_min_temp"` //       or cools to maintain interior zones within safe min/max
+	Spread                float64 `json:"spread"`
+	SecondaryMargin       float64 `json:"secondary_margin"`
+	TertiaryMargin        float64 `json:"tertiary_margin"`
 
 	RoleRotationMinutes int `json:"role_rotation_minutes"`
 	PollIntervalSeconds int `json:"poll_interval_seconds"`
