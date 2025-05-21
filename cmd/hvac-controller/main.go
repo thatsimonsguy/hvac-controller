@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,9 +11,9 @@ import (
 	"github.com/thatsimonsguy/hvac-controller/internal/controller"
 	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/logging"
-	"github.com/thatsimonsguy/hvac-controller/internal/startup"
 	"github.com/thatsimonsguy/hvac-controller/internal/state"
-	"github.com/thatsimonsguy/hvac-controller/internal/model"
+	"github.com/thatsimonsguy/hvac-controller/system/shutdown"
+	"github.com/thatsimonsguy/hvac-controller/system/startup"
 )
 
 func main() {
@@ -53,24 +52,20 @@ func main() {
 	}
 
 	if !cfg.SafeMode {
-		err := gpio.Activate(systemState.MainPowerPin)
-		if err != nil{
-			log.Fatal().Err(err).Msg("Failed to activate relay board power")
-		}
+		gpio.Activate(systemState.MainPowerPin)
 	}
 
-	ctrl := controller.New(cfg, systemState)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	go ctrl.Run(ctx)
+	for _, zone := range systemState.Zones {
+		controller.RunZoneController(zone, cfg, systemState)
+	}
+	controller.RunBufferController(cfg, systemState)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 
 	<-sig
 	log.Info().Msg("Shutdown signal received — exiting")
+	shutdown.Shutdown(systemState, cfg)
 
 	// @todo: start HTTP server
 
