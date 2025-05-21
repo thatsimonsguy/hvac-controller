@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"github.com/thatsimonsguy/hvac-controller/internal/config"
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
 )
@@ -44,6 +45,7 @@ func NewSystemStateFromConfig() *SystemState {
 
 func LoadSystemState(path string) (*SystemState, error) {
 	f, err := os.Open(filepath.Join(path, "state.json"))
+	log.Info().Str("resolved_path", filepath.Join(path, "state.json")).Msg("Trying to load system state")
 	if err != nil {
 		return nil, err
 	}
@@ -58,6 +60,8 @@ func LoadSystemState(path string) (*SystemState, error) {
 func SaveSystemState(path string, state *SystemState) error {
 	tmp := filepath.Join(path, "state.json.tmp")
 	out := filepath.Join(path, "state.json")
+	log.Info().Str("resolved_path", filepath.Join(path, "state.json")).Msg("Trying to save system state")
+
 	f, err := os.Create(tmp)
 	if err != nil {
 		return err
