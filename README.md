@@ -32,8 +32,9 @@ A custom-built HVAC control system designed to manage a multi-zone heating and c
 
 1. Flash Raspberry Pi OS and enable SSH
 2. Clone the repo and install Go
+3. run ```go mod init github.com/thatsimonsguy/hvac-controller``` and ```go mod tidy```
 3. Configure `config/config.json` with system layout
 4. Run the controller:
 
    ```bash
-   go run ./cmd/controller
+   go run ./cmd/hvac-controller/main.go

@@ -59,126 +59,124 @@
       }
     }
   ],
-  "devices": [
-    {
-      "heat_pumps": {
-        "device_profile": {
-          "min_time_on": 10,
-          "min_time_off": 5,
-          "active_modes": [
-            "heating",
-            "cooling"
-          ]
-        },
-        "devices": [
-          {
-            "name": "heat_pump_A",
-            "gpiopin": {
-              "pin": 23,
-              "active_high": false
-            },
-            "mode_pin": {
-              "pin": 18,
-              "active_high": false
-            }
-          },
-          {
-            "name": "heat_pump_B",
-            "gpiopin": {
-              "pin": 24,
-              "active_high": false
-            },
-            "mode_pin": {
-              "pin": 19,
-              "active_high": false
-            }
-          }
+  "devices": {
+    "heat_pumps": {
+      "device_profile": {
+        "min_time_on": 10,
+        "min_time_off": 5,
+        "active_modes": [
+          "heating",
+          "cooling"
         ]
       },
-      "air_handlers": {
-        "device_profile": {
-          "min_time_on": 5,
-          "min_time_off": 3,
-          "active_modes": [
-            "heating",
-            "cooling",
-            "fan"
-          ]
-        },
-        "devices": [
-          {
-            "name": "main_floor_air_handler",
-            "gpiopin": {
-              "pin": 5,
-              "active_high": false
-            },
-            "circ_pump_pin": {
-              "pin": 6,
-              "active_high": false
-            },
-            "zone": "main_floor"
+      "devices": [
+        {
+          "name": "heat_pump_A",
+          "gpiopin": {
+            "pin": 23,
+            "active_high": false
           },
-          {
-            "name": "basement_air_handler",
-            "gpiopin": {
-              "pin": 12,
-              "active_high": false
-            },
-            "circ_pump_pin": {
-              "pin": 13,
-              "active_high": false
-            },
-            "zone": "basement"
+          "mode_pin": {
+            "pin": 18,
+            "active_high": false
           }
+        },
+        {
+          "name": "heat_pump_B",
+          "gpiopin": {
+            "pin": 24,
+            "active_high": false
+          },
+          "mode_pin": {
+            "pin": 19,
+            "active_high": false
+          }
+        }
+      ]
+    },
+    "air_handlers": {
+      "device_profile": {
+        "min_time_on": 5,
+        "min_time_off": 3,
+        "active_modes": [
+          "heating",
+          "cooling",
+          "fan"
         ]
       },
-      "radiant_floor_loops": {
-        "device_profile": {
-          "min_time_on": 5,
-          "min_time_off": 3,
-          "active_modes": [
-            "heating"
-          ]
-        },
-        "devices": [
-          {
-            "name": "basement_radiant_loop",
-            "gpiopin": {
-              "pin": 16,
-              "active_high": false
-            },
-            "zone": "basement"
+      "devices": [
+        {
+          "name": "main_floor_air_handler",
+          "gpiopin": {
+            "pin": 5,
+            "active_high": false
           },
-          {
-            "name": "garage_radiant_loop",
-            "gpiopin": {
-              "pin": 17,
-              "active_high": false
-            },
-            "zone": "garage"
-          }
+          "circ_pump_pin": {
+            "pin": 6,
+            "active_high": false
+          },
+          "zone": "main_floor"
+        },
+        {
+          "name": "basement_air_handler",
+          "gpiopin": {
+            "pin": 12,
+            "active_high": false
+          },
+          "circ_pump_pin": {
+            "pin": 13,
+            "active_high": false
+          },
+          "zone": "basement"
+        }
+      ]
+    },
+    "radiant_floor_loops": {
+      "device_profile": {
+        "min_time_on": 5,
+        "min_time_off": 3,
+        "active_modes": [
+          "heating"
         ]
       },
-      "boilers": {
-        "device_profile": {
-          "min_time_on": 2,
-          "min_time_off": 5,
-          "active_modes": [
-            "heating"
-          ]
+      "devices": [
+        {
+          "name": "basement_radiant_loop",
+          "gpiopin": {
+            "pin": 16,
+            "active_high": false
+          },
+          "zone": "basement"
         },
-        "devices": [
-          {
-            "name": "boiler",
-            "gpiopin": {
-              "pin": 22,
-              "active_high": false
-            }
-          }
+        {
+          "name": "garage_radiant_loop",
+          "gpiopin": {
+            "pin": 17,
+            "active_high": false
+          },
+          "zone": "garage"
+        }
+      ]
+    },
+    "boilers": {
+      "device_profile": {
+        "min_time_on": 2,
+        "min_time_off": 5,
+        "active_modes": [
+          "heating"
         ]
-      }
+      },
+      "devices": [
+        {
+          "name": "boiler",
+          "gpiopin": {
+            "pin": 22,
+            "active_high": false
+          }
+        }
+      ]
     }
-  ],
+  },
   "system_sensors": {
     "buffer_tank": {
       "id": "buffer_tank",
