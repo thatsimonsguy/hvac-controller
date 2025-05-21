@@ -8,94 +8,64 @@ import (
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
 )
 
-func ActivateAirHandler(ah *model.AirHandler) error {
+func ActivateAirHandler(ah *model.AirHandler) {
 	log.Info().Str("device", ah.Name).Msg("Activating air handler")
-	if err := gpio.Activate(ah.CircPumpPin); err != nil {
-		return err
-	}
+	gpio.Activate(ah.CircPumpPin)
 	time.Sleep(5 * time.Second)
-	if err := gpio.Activate(ah.Pin); err != nil {
-		return err
-	}
+	gpio.Activate(ah.Pin)
 	ah.LastChanged = time.Now()
-	return nil
 }
 
-func DeactivateAirHandler(ah *model.AirHandler) error {
+func DeactivateAirHandler(ah *model.AirHandler) {
 	log.Info().Str("device", ah.Name).Msg("Deactivating air handler")
-	if err := gpio.Deactivate(ah.Pin); err != nil {
-		return err
-	}
+	gpio.Deactivate(ah.Pin)
 	time.Sleep(30 * time.Second)
-	if err := gpio.Deactivate(ah.CircPumpPin); err != nil {
-		return err
-	}
+	gpio.Deactivate(ah.CircPumpPin)
 	ah.LastChanged = time.Now()
-	return nil
 }
 
-func ActivateRadiantLoop(rl *model.RadiantFloorLoop) error {
+func ActivateRadiantLoop(rl *model.RadiantFloorLoop) {
 	log.Info().Str("device", rl.Name).Msg("Activating radiant loop")
-	if err := gpio.Activate(rl.Pin); err != nil {
-		return err
-	}
+	gpio.Activate(rl.Pin)
 	rl.LastChanged = time.Now()
-	return nil
 }
 
-func DeactivateRadiantLoop(rl *model.RadiantFloorLoop) error {
+func DeactivateRadiantLoop(rl *model.RadiantFloorLoop) {
 	log.Info().Str("device", rl.Name).Msg("Deactivating radiant loop")
-	if err := gpio.Deactivate(rl.Pin); err != nil {
-		return err
-	}
+	gpio.Deactivate(rl.Pin)
 	rl.LastChanged = time.Now()
-	return nil
 }
 
-func ActivateBoiler(b *model.Boiler) error {
+func ActivateBoiler(b *model.Boiler) {
 	log.Info().Str("device", b.Name).Msg("Activating boiler")
-	if err := gpio.Activate(b.Pin); err != nil {
-		return err
-	}
+	gpio.Activate(b.Pin)
 	b.LastChanged = time.Now()
-	return nil
 }
 
-func DeactivateBoiler(b *model.Boiler) error {
+func DeactivateBoiler(b *model.Boiler) {
 	log.Info().Str("device", b.Name).Msg("Deactivating boiler")
-	if err := gpio.Deactivate(b.Pin); err != nil {
-		return err
-	}
+	gpio.Deactivate(b.Pin)
 	b.LastChanged = time.Now()
-	return nil
 }
 
-func ActivateHeatPump(hp *model.HeatPump) error {
+func ActivateHeatPump(hp *model.HeatPump) {
 	log.Info().Str("device", hp.Name).Msg("Activating heat pump")
-	if err := gpio.Activate(hp.Pin); err != nil {
-		return err
-	}
+	gpio.Activate(hp.Pin)
 	hp.LastChanged = time.Now()
-	return nil
 }
 
-func DeactivateHeatPump(hp *model.HeatPump) error {
+func DeactivateHeatPump(hp *model.HeatPump) {
 	log.Info().Str("device", hp.Name).Msg("Deactivating heat pump")
-	if err := gpio.Deactivate(hp.Pin); err != nil {
-		return err
-	}
+	gpio.Deactivate(hp.Pin)
 	hp.LastChanged = time.Now()
-	return nil
 }
 
 // returns whether a device is eligible to be toggled based on its configured minimum on/off times
-func CanToggle(d *model.Device, now time.Time) (bool, error) {
-	active, err := gpio.CurrentlyActive(d.Pin)
-	if err != nil {
-		return false, err
-	}
+func CanToggle(d *model.Device, now time.Time) bool {
+	active := gpio.CurrentlyActive(d.Pin)
+	
 	if active {
-		return now.Sub(d.LastChanged) >= d.MinOn, nil
+		return now.Sub(d.LastChanged) >= d.MinOn
 	}
-	return now.Sub(d.LastChanged) >= d.MinOff, nil
+	return now.Sub(d.LastChanged) >= d.MinOff
 }

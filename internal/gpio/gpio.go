@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/thatsimonsguy/hvac-controller/internal/pinctrl"
 
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
@@ -81,49 +83,69 @@ func SetSafeMode(enabled bool) {
 	safeMode = enabled
 }
 
-func Read(pin model.GPIOPin) (bool, error) {
-	return pinctrl.ReadLevel(pin.Number)
-}
-
-func Activate(pin model.GPIOPin) error {
-	if safeMode {
-		return nil
-	}
-	if pin.ActiveHigh {
-		return pinctrl.SetPin(pin.Number, "op", "pn", "dh")
-	}
-	return pinctrl.SetPin(pin.Number, "op", "pn", "dl")
-}
-
-func Deactivate(pin model.GPIOPin) error {
-	if safeMode {
-		return nil
-	}
-	if pin.ActiveHigh {
-		return pinctrl.SetPin(pin.Number, "op", "pn", "dl")
-	}
-	return pinctrl.SetPin(pin.Number, "op", "pn", "dh")
-}
-
-func CurrentlyActive(pin model.GPIOPin) (bool, error) {
-	level, err := Read(pin)
+func Read(pin model.GPIOPin) bool {
+	level, err := pinctrl.ReadLevel(pin.Number)
 	if err != nil {
-		return false, err
+		log.Fatal().Err(err).Int("pin", pin.Number).Msg("Failed to read pin level")
 	}
-	return pin.ActiveHigh == level, nil
+	return level
+}
+
+func Activate(pin model.GPIOPin) {
+	if safeMode {
+		return
+	}
+
+	if pin.ActiveHigh {
+		err := pinctrl.SetPin(pin.Number, "op", "pn", "dh")
+		if err != nil {
+			log.Fatal().Err(err).Int("pin", pin.Number).Msg("Failed to activate pin")
+		}
+		return
+	}
+
+	err := pinctrl.SetPin(pin.Number, "op", "pn", "dl")
+	if err != nil {
+		log.Fatal().Err(err).Int("pin", pin.Number).Msg("Failed to activate pin")
+	}
+}
+
+func Deactivate(pin model.GPIOPin) {
+	if safeMode {
+		return
+	}
+
+	if pin.ActiveHigh {
+		err := pinctrl.SetPin(pin.Number, "op", "pn", "dl")
+		if err != nil {
+			log.Fatal().Err(err).Int("pin", pin.Number).Msg("Failed to deactivate pin")
+		}
+		return
+	}
+
+	err := pinctrl.SetPin(pin.Number, "op", "pn", "dh")
+	if err != nil {
+		log.Fatal().Err(err).Int("pin", pin.Number).Msg("Failed to deactivate pin")
+	}
+}
+
+func CurrentlyActive(pin model.GPIOPin) bool {
+	level := Read(pin)
+	return pin.ActiveHigh == level
 }
 
 // ReadSensorTemp reads the last converted temperature value for a given sensor
-func ReadSensorTemp(sensorPath string) (float64, error) {
+func ReadSensorTemp(sensorPath string) float64 {
 	file := filepath.Join(sensorPath, "w1_slave")
 	data, err := os.ReadFile(file)
 	if err != nil {
-		return 0, fmt.Errorf("failed to read sensor data: %w", err)
+		log.Fatal().Err(fmt.Errorf("failed to read sensor data: %w", err))
 	}
 	var tempMilliC int
 	_, err = fmt.Sscanf(string(data), "%*s %*s %*s %*s %*s %*s %*s %*s %*s t=%d", &tempMilliC)
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse temperature: %w", err)
+		log.Fatal().Err(fmt.Errorf("failed to parse temperature: %w", err))
+
 	}
-	return float64(tempMilliC) / 1000.0, nil
+	return float64(tempMilliC) / 1000.0
 }
