@@ -147,7 +147,7 @@
   "system_sensors": {
     "buffer_tank": {
       "id": "buffer_tank",
-      "bus": "28-aaaaaaaa"
+      "bus": "28-0000005050cc"
     }
   }
 }
