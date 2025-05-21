@@ -2,57 +2,76 @@ package config
 
 import (
 	"testing"
+
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
+	"github.com/thatsimonsguy/hvac-controller/internal/model"
 )
 
-func boolPtr(b bool) *bool {
-	return &b
+func TestParseLogLevel(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected zerolog.Level
+	}{
+		{"default to info", "", zerolog.InfoLevel},
+		{"debug", "debug", zerolog.DebugLevel},
+		{"warn", "warn", zerolog.WarnLevel},
+		{"error", "error", zerolog.ErrorLevel},
+		{"unknown", "weird", zerolog.InfoLevel},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := parseLogLevel(tt.input)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
 }
 
-func TestValidate_GPIOValid(t *testing.T) {
-	cfg := Config{
-		GPIO: GPIO{
-			"temp_sensor_bus": &GPIOPin{Pin: 4, SafeState: nil}, // unmanaged
-
-			"boiler_relay":          &GPIOPin{Pin: 17, SafeState: boolPtr(true)},
-			"main_power_relay":      &GPIOPin{Pin: 23, SafeState: boolPtr(false)},
-			"main_floor_air_blower": &GPIOPin{Pin: 5, SafeState: boolPtr(true)},
-			"basement_air_pump":     &GPIOPin{Pin: 6, SafeState: boolPtr(true)},
+func TestConfigValidate_UniqueZones(t *testing.T) {
+	cfg := &Config{
+		Zones: []model.Zone{
+			{ID: "zone1"},
+			{ID: "zone1"}, // duplicate
 		},
 	}
 
-	cfg.validate() // should not panic
+	assert.PanicsWithValue(t,
+		"Duplicate zone ID found: zone1",
+		func() { cfg.validate() },
+	)
 }
 
-func TestValidate_GPIO_Missing(t *testing.T) {
-	cfg := Config{
-		GPIO: GPIO{
-			"boiler_relay":     nil,
-			"main_power_relay": &GPIOPin{Pin: 23, SafeState: boolPtr(false)},
+func TestConfigValidate_UnknownZoneReference(t *testing.T) {
+	cfg := &Config{
+		Zones: []model.Zone{
+			{ID: "zone1"},
+		},
+		DeviceConfig: DeviceConfig{
+			AirHandlers: AirHandlerGroup{
+				Devices: []AirHandlerConfig{
+					{Name: "ah1", Zone: "zoneX"},
+				},
+			},
 		},
 	}
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic due to missing GPIO config, but got none")
-		}
-	}()
-
-	cfg.validate()
+	assert.PanicsWithValue(t,
+		"Air handler ah1 references unknown zone ID: zoneX",
+		func() { cfg.validate() },
+	)
 }
 
-func TestValidate_GPIO_Conflict(t *testing.T) {
-	cfg := Config{
-		GPIO: GPIO{
-			"boiler_relay":     &GPIOPin{Pin: 17, SafeState: boolPtr(true)},
-			"main_power_relay": &GPIOPin{Pin: 17, SafeState: boolPtr(false)}, // conflict
-		},
+func TestConfigValidate_GPIOConflict(t *testing.T) {
+	cfg := &Config{
+		TempSensorBusGPIO: 4,
+		MainPowerGPIO:     4, // conflict with above
+		Zones:             []model.Zone{{ID: "zone1"}},
 	}
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic due to conflicting pin numbers, but got none")
-		}
-	}()
-
-	cfg.validate()
+	assert.PanicsWithValue(t,
+		"GPIO pin conflict: temp_sensor_bus_gpio and main_power_gpio both use pin 4",
+		func() { cfg.validate() },
+	)
 }

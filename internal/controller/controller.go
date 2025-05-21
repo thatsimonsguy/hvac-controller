@@ -34,50 +34,65 @@ func RunBufferController() {
 
 			// activate or deactivate heat sources if they should be and we can
 			if sources.Primary != nil {
-				active := gpio.CurrentlyActive(sources.Primary.Pin)
-				togglePrimary := evaluateToggleSource("primary", bufferTemp, active, &sources.Primary.Device, env.SystemState.SystemMode)
-
-				if togglePrimary && active {
-					log.Info().Str("device", sources.Primary.Name).Msg("Deactivating primary heat pump")
-					device.DeactivateHeatPump(sources.Primary)
-				}
-				if togglePrimary && !active {
-					log.Info().Str("device", sources.Primary.Name).Msg("Activating primary heat pump")
-					device.ActivateHeatPump(sources.Primary)
-				}
+				evaluateAndToggle(
+					"primary",
+					sources.Primary.Device,
+					gpio.CurrentlyActive(sources.Primary.Pin),
+					bufferTemp,
+					env.SystemState.SystemMode,
+					func() { device.ActivateHeatPump(sources.Primary) },
+					func() { device.DeactivateHeatPump(sources.Primary) },
+				)
 			}
 
 			if sources.Secondary != nil {
-				active := gpio.CurrentlyActive(sources.Secondary.Pin)
-				togglePrimary := evaluateToggleSource("secondary", bufferTemp, active, &sources.Secondary.Device, env.SystemState.SystemMode)
-
-				if togglePrimary && active {
-					log.Info().Str("device", sources.Primary.Name).Msg("Deactivating secondary heat pump")
-					device.DeactivateHeatPump(sources.Secondary)
-				}
-				if togglePrimary && !active {
-					log.Info().Str("device", sources.Primary.Name).Msg("Activating secondary heat pump")
-					device.ActivateHeatPump(sources.Secondary)
-				}
+				evaluateAndToggle(
+					"secondary",
+					sources.Secondary.Device,
+					gpio.CurrentlyActive(sources.Secondary.Pin),
+					bufferTemp,
+					env.SystemState.SystemMode,
+					func() { device.ActivateHeatPump(sources.Secondary) },
+					func() { device.DeactivateHeatPump(sources.Secondary) },
+				)
 			}
 
 			if sources.Tertiary != nil {
-				active := gpio.CurrentlyActive(sources.Tertiary.Pin)
-				togglePrimary := evaluateToggleSource("tertiary", bufferTemp, active, &sources.Tertiary.Device, env.SystemState.SystemMode)
-
-				if togglePrimary && active {
-					log.Warn().Str("device", sources.Primary.Name).Msg("Deactivating boiler as tertiary heat source")
-					device.DeactivateBoiler(sources.Tertiary)
-				}
-				if togglePrimary && !active {
-					log.Warn().Str("device", sources.Primary.Name).Msg("Activating boiler as tertiary heat source")
-					device.ActivateBoiler(sources.Tertiary)
-				}
+				evaluateAndToggle(
+					"tertiary",
+					sources.Tertiary.Device,
+					gpio.CurrentlyActive(sources.Tertiary.Pin),
+					bufferTemp,
+					env.SystemState.SystemMode,
+					func() { device.ActivateBoiler(sources.Tertiary) },
+					func() { device.DeactivateBoiler(sources.Tertiary) },
+				)
 			}
 
 			time.Sleep(time.Duration(env.Cfg.PollIntervalSeconds) * time.Second)
 		}
 	}()
+}
+
+func evaluateAndToggle(
+	role string,
+	source model.Device,
+	active bool,
+	bufferTemp float64,
+	mode model.SystemMode,
+	activate func(),
+	deactivate func(),
+) {
+	shouldToggle := evaluateToggleSource(role, bufferTemp, active, &source, mode)
+
+	if shouldToggle && active {
+		log.Info().Str("device", source.Name).Msgf("Deactivating %s", role)
+		deactivate()
+	}
+	if shouldToggle && !active {
+		log.Info().Str("device", source.Name).Msgf("Activating %s", role)
+		activate()
+	}
 }
 
 func shouldBeOn(bt float64, threshold float64, mode model.SystemMode) bool {
@@ -91,12 +106,11 @@ func shouldBeOn(bt float64, threshold float64, mode model.SystemMode) bool {
 	}
 }
 
-func evaluateToggleSource(role string, bt float64, active bool, d *model.Device, mode model.SystemMode) bool {
+var evaluateToggleSource = func(role string, bt float64, active bool, d *model.Device, mode model.SystemMode) bool {
 	threshold := getThreshold(role, mode)
 	should := shouldBeOn(bt, threshold, mode)
 
 	if should == active {
-		// Already in the correct state, no toggle needed
 		return false
 	}
 
@@ -141,7 +155,7 @@ func refreshSources() HeatSources {
 
 	mode := env.SystemState.SystemMode
 	now := time.Now()
-	sources := GetHeatSources()
+	sources := getHeatSources()
 
 	// verify that we have some heat source we can use in our current mode
 	offlineCool := !sources.Primary.Online && !sources.Secondary.Online && mode == model.ModeCooling
@@ -205,7 +219,7 @@ func RunZoneController(zone model.Zone) {
 	}()
 }
 
-func GetHeatSources() HeatSources {
+func getHeatSources() HeatSources {
 	var primary *model.HeatPump
 	var secondary *model.HeatPump
 	var tertiary *model.Boiler
