@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/thatsimonsguy/hvac-controller/internal/pinctrl"
 
@@ -133,18 +135,27 @@ func CurrentlyActive(pin model.GPIOPin) bool {
 	return pin.ActiveHigh == &level
 }
 
-// ReadSensorTemp reads the last converted temperature value for a given sensor
 func ReadSensorTemp(sensorPath string) float64 {
 	file := filepath.Join(sensorPath, "w1_slave")
 	data, err := os.ReadFile(file)
 	if err != nil {
 		shutdown.ShutdownWithError(fmt.Errorf("failed to read sensor data: %w", err), "fatal sensor read failure")
 	}
-	var tempMilliC int
-	_, err = fmt.Sscanf(string(data), "%*s %*s %*s %*s %*s %*s %*s %*s %*s t=%d", &tempMilliC)
-	if err != nil {
-		shutdown.ShutdownWithError(fmt.Errorf("failed to parse temperature: %w", err), "fatal sensor read failure")
 
+	lines := strings.Split(string(data), "\n")
+	if len(lines) < 2 || !strings.Contains(lines[1], "t=") {
+		shutdown.ShutdownWithError(fmt.Errorf("temperature data missing or malformed"), "fatal sensor read failure")
 	}
+
+	parts := strings.Split(lines[1], "t=")
+	if len(parts) != 2 {
+		shutdown.ShutdownWithError(fmt.Errorf("could not parse temperature line: %s", lines[1]), "fatal sensor read failure")
+	}
+
+	tempMilliC, err := strconv.Atoi(parts[1])
+	if err != nil {
+		shutdown.ShutdownWithError(fmt.Errorf("failed to convert temperature to int: %w", err), "fatal sensor read failure")
+	}
+
 	return float64(tempMilliC) / 1000.0
 }
