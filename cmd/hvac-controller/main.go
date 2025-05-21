@@ -37,6 +37,7 @@ func main() {
 		log.Warn().Err(loadErr).Msg("Failed to load existing system state, starting with defaults")
 		// indicates first run
 		env.SystemState = state.NewSystemStateFromConfig() // create state file from config
+		state.SaveSystemState(env.Cfg.StateFilePath, env.SystemState)
 
 		// write a pinctrl shell script to disk that sets initial pin states, run it now, and install it as a service
 		// context: pin states can float or fluctuate during device boot, so we're setting them as early as possible to their off states via systemd service
