@@ -83,6 +83,10 @@ func evaluateAndToggle(
 	activate func(),
 	deactivate func(),
 ) {
+	if mode == model.ModeCirculate || mode == model.ModeOff {
+		return // early out for modes that don't use the buffer tank
+	}
+
 	shouldToggle := evaluateToggleSource(role, bufferTemp, active, &source, mode)
 
 	if shouldToggle && active {
@@ -118,6 +122,11 @@ var evaluateToggleSource = func(role string, bt float64, active bool, d *model.D
 }
 
 func getThreshold(role string, mode model.SystemMode) float64 {
+	log.Debug().
+		Str("role", role).
+		Str("mode", string(mode)).
+		Msg("Evaluating temperature threshold")
+
 	if role != "primary" && role != "secondary" && role != "tertiary" {
 		shutdown.ShutdownWithError(fmt.Errorf("invalid role definition: %s", role), "error setting temperature thresholds")
 	}

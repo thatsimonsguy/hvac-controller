@@ -363,4 +363,21 @@ func TestEvaluateAndToggle(t *testing.T) {
 		assert.False(t, activated)
 		assert.False(t, deactivated)
 	})
+
+	t.Run("mode is off, no toggle should occur", func(t *testing.T) {
+		activated, deactivated = false, false
+
+		evaluateAndToggle("primary", model.Device{Name: "offcase"}, false, 45, model.ModeOff, mockActivate, mockDeactivate)
+		assert.False(t, activated)
+		assert.False(t, deactivated)
+	})
+
+	t.Run("mode is circulate, no toggle should occur", func(t *testing.T) {
+		activated, deactivated = false, false
+
+		evaluateAndToggle("primary", model.Device{Name: "circ"}, true, 45, model.ModeCirculate, mockActivate, mockDeactivate)
+		assert.False(t, activated)
+		assert.False(t, deactivated)
+	})
+
 }
