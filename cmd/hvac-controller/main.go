@@ -9,6 +9,7 @@ import (
 
 	"github.com/thatsimonsguy/hvac-controller/internal/config"
 	"github.com/thatsimonsguy/hvac-controller/internal/controller"
+	"github.com/thatsimonsguy/hvac-controller/internal/env"
 	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/logging"
 	"github.com/thatsimonsguy/hvac-controller/internal/state"
@@ -17,55 +18,57 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
-	logging.Init(cfg.LogLevel)
+	env.Cfg = config.Load()
+	logging.Init(env.Cfg.LogLevel)
 
 	log.Info().
-		Str("state_file", cfg.StateFilePath).
+		Str("state_file", env.Cfg.StateFilePath).
 		Msg("Starting HVAC controller")
 
-	gpio.SetSafeMode(cfg.SafeMode)
-	if cfg.SafeMode {
+	gpio.SetSafeMode(env.Cfg.SafeMode)
+	if env.Cfg.SafeMode {
 		log.Warn().Msg("SAFE MODE ENABLED — GPIO Set() is disabled system-wide")
 	}
 
-	systemState, err := state.LoadSystemState(cfg.StateFilePath)
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to load existing system state, starting with defaults")
+	state.Init(env.Cfg)
+	var loadErr error
+	env.SystemState, loadErr = state.LoadSystemState(env.Cfg.StateFilePath)
+	if loadErr != nil {
+		log.Warn().Err(loadErr).Msg("Failed to load existing system state, starting with defaults")
 		// indicates first run
-		systemState = state.NewSystemStateFromConfig(cfg) // create state file from config
+		env.SystemState = state.NewSystemStateFromConfig() // create state file from config
 
 		// write a pinctrl shell script to disk that sets initial pin states, run it now, and install it as a service
 		// context: pin states can float or fluctuate during device boot, so we're setting them as early as possible to their off states via systemd service
-		startup.WriteStartupScript(cfg, systemState)
-		startup.RunStartupScript(cfg.BootScriptFilePath)
-		startup.InstallStartupService(cfg)
+		startup.WriteStartupScript()
+		startup.RunStartupScript()
+		startup.InstallStartupService()
 	}
 
 	log.Info().
-		Str("mode", string(systemState.SystemMode)).
-		Int("zones", len(systemState.Zones)).
+		Str("mode", string(env.SystemState.SystemMode)).
+		Int("zones", len(env.SystemState.Zones)).
 		Msg("Loaded system state")
 
-	if err := gpio.ValidateInitialPinStates(systemState); err != nil {
+	if err := gpio.ValidateInitialPinStates(); err != nil {
 		log.Fatal().Err(err).Msg("Refusing to enable relay board due to unsafe pin states")
 	}
 
-	if !cfg.SafeMode {
-		gpio.Activate(systemState.MainPowerPin)
+	if !env.Cfg.SafeMode {
+		gpio.Activate(env.SystemState.MainPowerPin)
 	}
 
-	for _, zone := range systemState.Zones {
-		controller.RunZoneController(zone, cfg, systemState)
+	for _, zone := range env.SystemState.Zones {
+		controller.RunZoneController(zone)
 	}
-	controller.RunBufferController(cfg, systemState)
+	controller.RunBufferController()
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 
 	<-sig
 	log.Info().Msg("Shutdown signal received — exiting")
-	shutdown.Shutdown(systemState, cfg)
+	shutdown.Shutdown()
 
 	// @todo: start HTTP server
 

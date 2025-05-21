@@ -6,12 +6,11 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/thatsimonsguy/hvac-controller/internal/config"
+	"github.com/thatsimonsguy/hvac-controller/internal/env"
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
-	"github.com/thatsimonsguy/hvac-controller/internal/state"
 )
 
-func WriteStartupScript(cfg *config.Config, state *state.SystemState) error {
+func WriteStartupScript() error {
 	var lines []string
 	lines = append(lines, "#!/bin/bash", "", "# HVAC GPIO pin configuration at boot", "")
 
@@ -25,32 +24,32 @@ func WriteStartupScript(cfg *config.Config, state *state.SystemState) error {
 		lines = append(lines, "")
 	}
 
-	for _, hp := range state.HeatPumps {
+	for _, hp := range env.SystemState.HeatPumps {
 		write(hp.Name, hp.Pin, false)
 
-		modeActive := contains(hp.Device.ActiveModes, string(state.SystemMode)) &&
-			state.SystemMode == model.ModeCooling && hp.Device.Online
+		modeActive := contains(hp.Device.ActiveModes, string(env.SystemState.SystemMode)) &&
+			env.SystemState.SystemMode == model.ModeCooling && hp.Device.Online
 		write(hp.Name+".mode_pin", hp.ModePin, modeActive)
 	}
 
-	for _, ah := range state.AirHandlers {
+	for _, ah := range env.SystemState.AirHandlers {
 		write(ah.Name, ah.Pin, false)
 		write(ah.Name+".circ_pump", ah.CircPumpPin, false)
 	}
-	for _, b := range state.Boilers {
+	for _, b := range env.SystemState.Boilers {
 		write(b.Name, b.Pin, false)
 	}
-	for _, rf := range state.RadiantLoops {
+	for _, rf := range env.SystemState.RadiantLoops {
 		write(rf.Name, rf.Pin, false)
 	}
 
-	write("main_power", state.MainPowerPin, false)
+	write("main_power", env.SystemState.MainPowerPin, false)
 
 	contents := strings.Join(lines, "\n") + "\n"
-	return os.WriteFile(cfg.BootScriptFilePath, []byte(contents), 0755)
+	return os.WriteFile(env.Cfg.BootScriptFilePath, []byte(contents), 0755)
 }
 
-func InstallStartupService(cfg *config.Config) error {
+func InstallStartupService() error {
 	unitContents := fmt.Sprintf(`[Unit]
 Description=Configure GPIO pins at boot
 After=network.target
@@ -62,13 +61,13 @@ RemainAfterExit=true
 
 [Install]
 WantedBy=multi-user.target
-`, cfg.BootScriptFilePath)
+`, env.Cfg.BootScriptFilePath)
 
-	return os.WriteFile(cfg.OSServicePath, []byte(unitContents), 0644)
+	return os.WriteFile(env.Cfg.OSServicePath, []byte(unitContents), 0644)
 }
 
-func RunStartupScript(scriptPath string) error {
-	cmd := exec.Command("/bin/bash", scriptPath)
+func RunStartupScript() error {
+	cmd := exec.Command("/bin/bash", env.Cfg.BootScriptFilePath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

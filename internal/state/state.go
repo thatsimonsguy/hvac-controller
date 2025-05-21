@@ -10,6 +10,12 @@ import (
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
 )
 
+var cfg *config.Config
+
+func Init(c *config.Config) {
+	cfg = c
+}
+
 type SystemState struct {
 	SystemMode       model.SystemMode         `json:"system_mode"`
 	Zones            []model.Zone             `json:"zones"`
@@ -22,14 +28,14 @@ type SystemState struct {
 	SystemSensors    map[string]model.Sensor  `json:"system_sensors"`
 }
 
-func NewSystemStateFromConfig(cfg *config.Config) *SystemState {
+func NewSystemStateFromConfig() *SystemState {
 	return &SystemState{
 		SystemMode:       model.ModeOff,
-		Zones:            hydrateZones(cfg),
-		HeatPumps:        hydrateHeatPumps(cfg),
-		AirHandlers:      hydrateAirHandlers(cfg),
-		Boilers:          hydrateBoilers(cfg),
-		RadiantLoops:     hydrateRadiantLoops(cfg),
+		Zones:            hydrateZones(),
+		HeatPumps:        hydrateHeatPumps(),
+		AirHandlers:      hydrateAirHandlers(),
+		Boilers:          hydrateBoilers(),
+		RadiantLoops:     hydrateRadiantLoops(),
 		MainPowerPin:     model.GPIOPin{Number: cfg.MainPowerGPIO, ActiveHigh: cfg.MainPowerActiveHigh},
 		TempSensorBusPin: cfg.TempSensorBusGPIO,
 		SystemSensors:    cfg.SystemSensors,
@@ -67,7 +73,7 @@ func SaveSystemState(path string, state *SystemState) error {
 	return os.Rename(tmp, out)
 }
 
-func hydrateZones(cfg *config.Config) []model.Zone {
+func hydrateZones() []model.Zone {
 	zones := make([]model.Zone, 0, len(cfg.Zones))
 	for _, z := range cfg.Zones {
 		zones = append(zones, model.Zone{
@@ -80,7 +86,7 @@ func hydrateZones(cfg *config.Config) []model.Zone {
 	return zones
 }
 
-func hydrateHeatPumps(cfg *config.Config) []model.HeatPump {
+func hydrateHeatPumps() []model.HeatPump {
 	hpProfile := cfg.DeviceConfig.HeatPumps.DeviceProfile
 	hpList := make([]model.HeatPump, 0, len(cfg.DeviceConfig.HeatPumps.Devices))
 	for _, hp := range cfg.DeviceConfig.HeatPumps.Devices {
@@ -104,10 +110,10 @@ func hydrateHeatPumps(cfg *config.Config) []model.HeatPump {
 	return hpList
 }
 
-func hydrateAirHandlers(cfg *config.Config) []model.AirHandler {
+func hydrateAirHandlers() []model.AirHandler {
 	ahProfile := cfg.DeviceConfig.AirHandlers.DeviceProfile
 	ahList := make([]model.AirHandler, 0, len(cfg.DeviceConfig.AirHandlers.Devices))
-	zoneLookup := buildZoneLookup(cfg)
+	zoneLookup := buildZoneLookup()
 
 	for _, ah := range cfg.DeviceConfig.AirHandlers.Devices {
 		zone := zoneLookup[ah.Zone]
@@ -127,7 +133,7 @@ func hydrateAirHandlers(cfg *config.Config) []model.AirHandler {
 	return ahList
 }
 
-func hydrateBoilers(cfg *config.Config) []model.Boiler {
+func hydrateBoilers() []model.Boiler {
 	boilerProfile := cfg.DeviceConfig.Boilers.DeviceProfile
 	boilerList := make([]model.Boiler, 0, len(cfg.DeviceConfig.Boilers.Devices))
 
@@ -146,10 +152,10 @@ func hydrateBoilers(cfg *config.Config) []model.Boiler {
 	return boilerList
 }
 
-func hydrateRadiantLoops(cfg *config.Config) []model.RadiantFloorLoop {
+func hydrateRadiantLoops() []model.RadiantFloorLoop {
 	rfProfile := cfg.DeviceConfig.RadiantFloorLoops.DeviceProfile
 	rfList := make([]model.RadiantFloorLoop, 0, len(cfg.DeviceConfig.RadiantFloorLoops.Devices))
-	zoneLookup := buildZoneLookup(cfg)
+	zoneLookup := buildZoneLookup()
 
 	for _, rf := range cfg.DeviceConfig.RadiantFloorLoops.Devices {
 		zone := zoneLookup[rf.Zone]
@@ -169,7 +175,7 @@ func hydrateRadiantLoops(cfg *config.Config) []model.RadiantFloorLoop {
 }
 
 // Helper: create a map of zone ID to pointer
-func buildZoneLookup(cfg *config.Config) map[string]*model.Zone {
+func buildZoneLookup() map[string]*model.Zone {
 	zoneLookup := make(map[string]*model.Zone)
 	for i := range cfg.Zones {
 		z := &cfg.Zones[i]
