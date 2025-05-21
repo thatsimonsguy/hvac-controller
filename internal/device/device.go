@@ -63,7 +63,7 @@ func DeactivateHeatPump(hp *model.HeatPump) {
 // returns whether a device is eligible to be toggled based on its configured minimum on/off times
 func CanToggle(d *model.Device, now time.Time) bool {
 	active := gpio.CurrentlyActive(d.Pin)
-	
+
 	if active {
 		return now.Sub(d.LastChanged) >= d.MinOn
 	}
