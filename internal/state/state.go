@@ -36,7 +36,7 @@ func NewSystemStateFromConfig() *SystemState {
 		AirHandlers:      hydrateAirHandlers(),
 		Boilers:          hydrateBoilers(),
 		RadiantLoops:     hydrateRadiantLoops(),
-		MainPowerPin:     model.GPIOPin{Number: cfg.MainPowerGPIO, ActiveHigh: cfg.MainPowerActiveHigh},
+		MainPowerPin:     model.GPIOPin{Number: cfg.MainPowerGPIO, ActiveHigh: &cfg.MainPowerActiveHigh},
 		TempSensorBusPin: cfg.TempSensorBusGPIO,
 		SystemSensors:    cfg.SystemSensors,
 	}
@@ -93,13 +93,13 @@ func hydrateHeatPumps() []model.HeatPump {
 		hpList = append(hpList, model.HeatPump{
 			Device: model.Device{
 				Name:        hp.Name,
-				Pin:         model.GPIOPin{Number: hp.Pin, ActiveHigh: cfg.RelayBoardActiveHigh},
+				Pin:         model.GPIOPin{Number: hp.Pin, ActiveHigh: &cfg.RelayBoardActiveHigh},
 				MinOn:       time.Duration(hpProfile.MinTimeOn) * time.Minute,
 				MinOff:      time.Duration(hpProfile.MinTimeOff) * time.Minute,
 				Online:      true,
 				ActiveModes: hpProfile.ActiveModes,
 			},
-			ModePin:     model.GPIOPin{Number: hp.ModePin, ActiveHigh: cfg.RelayBoardActiveHigh},
+			ModePin:     model.GPIOPin{Number: hp.ModePin, ActiveHigh: &cfg.RelayBoardActiveHigh},
 			IsPrimary:   false,
 			LastRotated: time.Now(),
 		})
@@ -120,14 +120,14 @@ func hydrateAirHandlers() []model.AirHandler {
 		ahList = append(ahList, model.AirHandler{
 			Device: model.Device{
 				Name:        ah.Name,
-				Pin:         model.GPIOPin{Number: ah.Pin, ActiveHigh: cfg.RelayBoardActiveHigh},
+				Pin:         model.GPIOPin{Number: ah.Pin, ActiveHigh: &cfg.RelayBoardActiveHigh},
 				MinOn:       time.Duration(ahProfile.MinTimeOn) * time.Minute,
 				MinOff:      time.Duration(ahProfile.MinTimeOff) * time.Minute,
 				Online:      true,
 				ActiveModes: ahProfile.ActiveModes,
 			},
 			Zone:        zone,
-			CircPumpPin: model.GPIOPin{Number: ah.CircPumpPin, ActiveHigh: cfg.RelayBoardActiveHigh},
+			CircPumpPin: model.GPIOPin{Number: ah.CircPumpPin, ActiveHigh: &cfg.RelayBoardActiveHigh},
 		})
 	}
 	return ahList
@@ -141,7 +141,7 @@ func hydrateBoilers() []model.Boiler {
 		boilerList = append(boilerList, model.Boiler{
 			Device: model.Device{
 				Name:        b.Name,
-				Pin:         model.GPIOPin{Number: b.Pin, ActiveHigh: cfg.RelayBoardActiveHigh},
+				Pin:         model.GPIOPin{Number: b.Pin, ActiveHigh: &cfg.RelayBoardActiveHigh},
 				MinOn:       time.Duration(boilerProfile.MinTimeOn) * time.Minute,
 				MinOff:      time.Duration(boilerProfile.MinTimeOff) * time.Minute,
 				Online:      true,
@@ -162,7 +162,7 @@ func hydrateRadiantLoops() []model.RadiantFloorLoop {
 		rfList = append(rfList, model.RadiantFloorLoop{
 			Device: model.Device{
 				Name:        rf.Name,
-				Pin:         model.GPIOPin{Number: rf.Pin, ActiveHigh: cfg.RelayBoardActiveHigh},
+				Pin:         model.GPIOPin{Number: rf.Pin, ActiveHigh: &cfg.RelayBoardActiveHigh},
 				MinOn:       time.Duration(rfProfile.MinTimeOn) * time.Minute,
 				MinOff:      time.Duration(rfProfile.MinTimeOff) * time.Minute,
 				Online:      true,

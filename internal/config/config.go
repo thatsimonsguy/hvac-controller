@@ -10,12 +10,7 @@ import (
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
 )
 
-type GPIOPin struct {
-	Pin       int   `json:"pin"`
-	SafeState *bool `json:"safe_state"` // true = HIGH, false = LOW, null = SENSOR INPUT
-}
-
-type GPIO map[string]*GPIOPin
+type GPIO map[string]*model.GPIOPin
 type Sensors map[string]string // e.g. "garage_temp" => "28-xxxxxx"
 
 type Config struct {
