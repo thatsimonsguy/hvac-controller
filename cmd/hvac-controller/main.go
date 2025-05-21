@@ -51,7 +51,7 @@ func main() {
 		Msg("Loaded system state")
 
 	if err := gpio.ValidateInitialPinStates(); err != nil {
-		log.Fatal().Err(err).Msg("Refusing to enable relay board due to unsafe pin states")
+		shutdown.ShutdownWithError(err, "Refusing to enable relay board due to unsafe pin states")
 	}
 
 	if !env.Cfg.SafeMode {

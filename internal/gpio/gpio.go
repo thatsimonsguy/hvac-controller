@@ -5,12 +5,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/thatsimonsguy/hvac-controller/internal/pinctrl"
 
-	"github.com/thatsimonsguy/hvac-controller/internal/model"
 	"github.com/thatsimonsguy/hvac-controller/internal/env"
+	"github.com/thatsimonsguy/hvac-controller/internal/model"
+	"github.com/thatsimonsguy/hvac-controller/system/shutdown"
 )
 
 var safeMode bool
@@ -86,7 +85,7 @@ func SetSafeMode(enabled bool) {
 func Read(pin model.GPIOPin) bool {
 	level, err := pinctrl.ReadLevel(pin.Number)
 	if err != nil {
-		log.Fatal().Err(err).Int("pin", pin.Number).Msg("Failed to read pin level")
+		shutdown.ShutdownWithError(err, fmt.Sprintf("Failed to read pin level for pin %d", pin.Number))
 	}
 	return level
 }
@@ -99,14 +98,14 @@ func Activate(pin model.GPIOPin) {
 	if pin.ActiveHigh {
 		err := pinctrl.SetPin(pin.Number, "op", "pn", "dh")
 		if err != nil {
-			log.Fatal().Err(err).Int("pin", pin.Number).Msg("Failed to activate pin")
+			shutdown.ShutdownWithError(err, fmt.Sprintf("Failed to activate pin %d", pin.Number))
 		}
 		return
 	}
 
 	err := pinctrl.SetPin(pin.Number, "op", "pn", "dl")
 	if err != nil {
-		log.Fatal().Err(err).Int("pin", pin.Number).Msg("Failed to activate pin")
+		shutdown.ShutdownWithError(err, fmt.Sprintf("Failed to activate pin %d", pin.Number))
 	}
 }
 
@@ -118,14 +117,14 @@ func Deactivate(pin model.GPIOPin) {
 	if pin.ActiveHigh {
 		err := pinctrl.SetPin(pin.Number, "op", "pn", "dl")
 		if err != nil {
-			log.Fatal().Err(err).Int("pin", pin.Number).Msg("Failed to deactivate pin")
+			shutdown.ShutdownWithError(err, fmt.Sprintf("Failed to deactivate pin %d", pin.Number))
 		}
 		return
 	}
 
 	err := pinctrl.SetPin(pin.Number, "op", "pn", "dh")
 	if err != nil {
-		log.Fatal().Err(err).Int("pin", pin.Number).Msg("Failed to deactivate pin")
+		shutdown.ShutdownWithError(err, fmt.Sprintf("Failed to deactivate pin %d", pin.Number))
 	}
 }
 
@@ -139,12 +138,12 @@ func ReadSensorTemp(sensorPath string) float64 {
 	file := filepath.Join(sensorPath, "w1_slave")
 	data, err := os.ReadFile(file)
 	if err != nil {
-		log.Fatal().Err(fmt.Errorf("failed to read sensor data: %w", err))
+		shutdown.ShutdownWithError(fmt.Errorf("failed to read sensor data: %w", err), "fatal sensor read failure")
 	}
 	var tempMilliC int
 	_, err = fmt.Sscanf(string(data), "%*s %*s %*s %*s %*s %*s %*s %*s %*s t=%d", &tempMilliC)
 	if err != nil {
-		log.Fatal().Err(fmt.Errorf("failed to parse temperature: %w", err))
+		shutdown.ShutdownWithError(fmt.Errorf("failed to parse temperature: %w", err), "fatal sensor read failure")
 
 	}
 	return float64(tempMilliC) / 1000.0

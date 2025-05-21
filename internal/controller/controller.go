@@ -8,9 +8,10 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/thatsimonsguy/hvac-controller/internal/device"
+	"github.com/thatsimonsguy/hvac-controller/internal/env"
 	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
-	"github.com/thatsimonsguy/hvac-controller/internal/env"
+	"github.com/thatsimonsguy/hvac-controller/system/shutdown"
 )
 
 type HeatSources struct {
@@ -104,7 +105,7 @@ func evaluateToggleSource(role string, bt float64, active bool, d *model.Device,
 
 func getThreshold(role string, mode model.SystemMode) float64 {
 	if role != "primary" && role != "secondary" && role != "tertiary" {
-		log.Fatal().Err(fmt.Errorf("invalid role definition: %s", role))
+		shutdown.ShutdownWithError(fmt.Errorf("invalid role definition: %s", role), "error setting temperature thresholds")
 	}
 
 	switch mode {
@@ -124,12 +125,12 @@ func getThreshold(role string, mode model.SystemMode) float64 {
 		case "secondary":
 			return env.Cfg.CoolingThreshold + env.Cfg.SecondaryMargin
 		case "tertiary":
-			log.Fatal().Err(fmt.Errorf("invalid tertiary in cooling mode"))
+			shutdown.ShutdownWithError(fmt.Errorf("invalid tertiary in cooling mode"), "heat source list composition failure")
 		}
 	}
 
 	// Should never be reached
-	log.Fatal().Msg("unreachable path in getThreshold")
+	shutdown.ShutdownWithError(fmt.Errorf("unreachable path in getThreshold"), "threshold logical path error")
 	return 0.0
 }
 
@@ -214,7 +215,7 @@ func GetHeatSources() HeatSources {
 		hp := &env.SystemState.HeatPumps[i]
 		if hp.IsPrimary {
 			if foundPrimary {
-				log.Fatal().Msg("Multiple heat pumps marked as primary")
+				shutdown.ShutdownWithError(fmt.Errorf("multiple heat pumps marked as primary"), "statefile validation error")
 			}
 			foundPrimary = true
 			primary = hp
