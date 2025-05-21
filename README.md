@@ -1,6 +1,4 @@
-from pathlib import Path
-
-readme_content = """# HVAC Controller
+# HVAC Controller
 
 A custom-built HVAC control system designed to manage a multi-zone heating and cooling setup using a Raspberry Pi 5. This project supports zone-based control of heat pumps, air handlers, radiant pumps, and more, with GPIO integration and state persistence.
 
