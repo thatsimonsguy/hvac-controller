@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-	"github.com/thatsimonsguy/hvac-controller/internal/config"
+
 	"github.com/thatsimonsguy/hvac-controller/internal/device"
 	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
-	"github.com/thatsimonsguy/hvac-controller/internal/state"
+	"github.com/thatsimonsguy/hvac-controller/internal/env"
 )
 
 type HeatSources struct {
@@ -19,22 +19,22 @@ type HeatSources struct {
 	Tertiary  *model.Boiler
 }
 
-func RunBufferController(cfg *config.Config, state *state.SystemState) {
+func RunBufferController() {
 	go func() {
 		log.Info().Msg("Starting buffer tank controller")
 		for {
 			// refresh current source list to handle rotations and maintenance drops
-			sources := refreshSources(cfg, state)
+			sources := refreshSources()
 
 			// get buffer tank temp
-			sensor := state.SystemSensors["buffer_tank"]
+			sensor := env.SystemState.SystemSensors["buffer_tank"]
 			sensorPath := filepath.Join("/sys/bus/w1/devices", sensor.Bus)
 			bufferTemp := gpio.ReadSensorTemp(sensorPath)
 
 			// activate or deactivate heat sources if they should be and we can
 			if sources.Primary != nil {
 				active := gpio.CurrentlyActive(sources.Primary.Pin)
-				togglePrimary := evaluateToggleSource("primary", bufferTemp, active, cfg, &sources.Primary.Device, state.SystemMode)
+				togglePrimary := evaluateToggleSource("primary", bufferTemp, active, &sources.Primary.Device, env.SystemState.SystemMode)
 
 				if togglePrimary && active {
 					log.Info().Str("device", sources.Primary.Name).Msg("Deactivating primary heat pump")
@@ -48,7 +48,7 @@ func RunBufferController(cfg *config.Config, state *state.SystemState) {
 
 			if sources.Secondary != nil {
 				active := gpio.CurrentlyActive(sources.Secondary.Pin)
-				togglePrimary := evaluateToggleSource("secondary", bufferTemp, active, cfg, &sources.Secondary.Device, state.SystemMode)
+				togglePrimary := evaluateToggleSource("secondary", bufferTemp, active, &sources.Secondary.Device, env.SystemState.SystemMode)
 
 				if togglePrimary && active {
 					log.Info().Str("device", sources.Primary.Name).Msg("Deactivating secondary heat pump")
@@ -62,7 +62,7 @@ func RunBufferController(cfg *config.Config, state *state.SystemState) {
 
 			if sources.Tertiary != nil {
 				active := gpio.CurrentlyActive(sources.Tertiary.Pin)
-				togglePrimary := evaluateToggleSource("tertiary", bufferTemp, active, cfg, &sources.Tertiary.Device, state.SystemMode)
+				togglePrimary := evaluateToggleSource("tertiary", bufferTemp, active, &sources.Tertiary.Device, env.SystemState.SystemMode)
 
 				if togglePrimary && active {
 					log.Warn().Str("device", sources.Primary.Name).Msg("Deactivating boiler as tertiary heat source")
@@ -74,7 +74,7 @@ func RunBufferController(cfg *config.Config, state *state.SystemState) {
 				}
 			}
 
-			time.Sleep(time.Duration(cfg.PollIntervalSeconds) * time.Second)
+			time.Sleep(time.Duration(env.Cfg.PollIntervalSeconds) * time.Second)
 		}
 	}()
 }
@@ -90,8 +90,8 @@ func shouldBeOn(bt float64, threshold float64, mode model.SystemMode) bool {
 	}
 }
 
-func evaluateToggleSource(role string, bt float64, active bool, cfg *config.Config, d *model.Device, mode model.SystemMode) bool {
-	threshold := getThreshold(role, cfg, mode)
+func evaluateToggleSource(role string, bt float64, active bool, d *model.Device, mode model.SystemMode) bool {
+	threshold := getThreshold(role, mode)
 	should := shouldBeOn(bt, threshold, mode)
 
 	if should == active {
@@ -102,7 +102,7 @@ func evaluateToggleSource(role string, bt float64, active bool, cfg *config.Conf
 	return device.CanToggle(d, time.Now())
 }
 
-func getThreshold(role string, cfg *config.Config, mode model.SystemMode) float64 {
+func getThreshold(role string, mode model.SystemMode) float64 {
 	if role != "primary" && role != "secondary" && role != "tertiary" {
 		log.Fatal().Err(fmt.Errorf("invalid role definition: %s", role))
 	}
@@ -111,18 +111,18 @@ func getThreshold(role string, cfg *config.Config, mode model.SystemMode) float6
 	case model.ModeHeating:
 		switch role {
 		case "primary":
-			return cfg.HeatingThreshold
+			return env.Cfg.HeatingThreshold
 		case "secondary":
-			return cfg.HeatingThreshold - cfg.SecondaryMargin
+			return env.Cfg.HeatingThreshold - env.Cfg.SecondaryMargin
 		case "tertiary":
-			return cfg.HeatingThreshold - cfg.TertiaryMargin
+			return env.Cfg.HeatingThreshold - env.Cfg.TertiaryMargin
 		}
 	case model.ModeCooling:
 		switch role {
 		case "primary":
-			return cfg.CoolingThreshold
+			return env.Cfg.CoolingThreshold
 		case "secondary":
-			return cfg.CoolingThreshold + cfg.SecondaryMargin
+			return env.Cfg.CoolingThreshold + env.Cfg.SecondaryMargin
 		case "tertiary":
 			log.Fatal().Err(fmt.Errorf("invalid tertiary in cooling mode"))
 		}
@@ -133,14 +133,14 @@ func getThreshold(role string, cfg *config.Config, mode model.SystemMode) float6
 	return 0.0
 }
 
-func refreshSources(cfg *config.Config, state *state.SystemState) HeatSources {
+func refreshSources() HeatSources {
 	var newPrimary *model.HeatPump
 	var newSecondary *model.HeatPump
 	var newTertiary *model.Boiler
 
-	mode := state.SystemMode
+	mode := env.SystemState.SystemMode
 	now := time.Now()
-	sources := GetHeatSources(state)
+	sources := GetHeatSources()
 
 	// verify that we have some heat source we can use in our current mode
 	offlineCool := !sources.Primary.Online && !sources.Secondary.Online && mode == model.ModeCooling
@@ -151,7 +151,7 @@ func refreshSources(cfg *config.Config, state *state.SystemState) HeatSources {
 
 	// happy path: both heat pumps online
 	if sources.Primary.Online && sources.Secondary.Online {
-		if now.Sub(sources.Primary.LastRotated) > time.Duration(cfg.RoleRotationMinutes)*time.Minute {
+		if now.Sub(sources.Primary.LastRotated) > time.Duration(env.Cfg.RoleRotationMinutes)*time.Minute {
 			log.Info().Msgf("Rotating heat pump primary from %s to %s", sources.Primary.Name, sources.Secondary.Name)
 			sources.Primary.IsPrimary = false
 			sources.Secondary.IsPrimary = true
@@ -194,24 +194,24 @@ func refreshSources(cfg *config.Config, state *state.SystemState) HeatSources {
 	}
 }
 
-func RunZoneController(zone model.Zone, cfg *config.Config, state *state.SystemState) {
+func RunZoneController(zone model.Zone) {
 	go func() {
 		log.Info().Str("zone", zone.ID).Msg("Starting zone controller")
 		for {
 			// TODO: Read zone temp, compare to setpoint, activate/deactivate loop or air handler
-			time.Sleep(time.Duration(cfg.PollIntervalSeconds) * time.Second)
+			time.Sleep(time.Duration(env.Cfg.PollIntervalSeconds) * time.Second)
 		}
 	}()
 }
 
-func GetHeatSources(state *state.SystemState) HeatSources {
+func GetHeatSources() HeatSources {
 	var primary *model.HeatPump
 	var secondary *model.HeatPump
 	var tertiary *model.Boiler
 	var foundPrimary bool
 
-	for i := range state.HeatPumps {
-		hp := &state.HeatPumps[i]
+	for i := range env.SystemState.HeatPumps {
+		hp := &env.SystemState.HeatPumps[i]
 		if hp.IsPrimary {
 			if foundPrimary {
 				log.Fatal().Msg("Multiple heat pumps marked as primary")
@@ -222,8 +222,8 @@ func GetHeatSources(state *state.SystemState) HeatSources {
 			secondary = hp
 		}
 	}
-	if len(state.Boilers) > 0 {
-		tertiary = &state.Boilers[0]
+	if len(env.SystemState.Boilers) > 0 {
+		tertiary = &env.SystemState.Boilers[0]
 	}
 
 	return HeatSources{

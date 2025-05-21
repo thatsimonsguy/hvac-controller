@@ -1,70 +1,77 @@
-package controller
+package controller_test
 
 import (
 	"testing"
-	"time"
 
-	"github.com/thatsimonsguy/hvac-controller/internal/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/thatsimonsguy/hvac-controller/internal/controller"
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
+	"github.com/thatsimonsguy/hvac-controller/internal/state"
 )
 
-func makeFakeController() *Controller {
-	now := time.Now()
+func TestGetHeatSources(t *testing.T) {
+	t.Run("returns primary and secondary heat pumps correctly", func(t *testing.T) {
+		st := &state.SystemState{
+			HeatPumps: []model.HeatPump{
+				{
+					Name:      "hp1",
+					IsPrimary: true,
+				},
+				{
+					Name: "hp2",
+				},
+			},
+			Boilers: []model.Boiler{
+				{
+					Name: "boiler1",
+				},
+			},
+		}
 
-	hpA := &Device{
-		Name:        "heat_pump_A",
-		Pin:         1,
-		LastChanged: now,
-		MinOn:       0,
-		MinOff:      0,
-	}
-	hpB := &Device{
-		Name:        "heat_pump_B",
-		Pin:         2,
-		LastChanged: now,
-		MinOn:       0,
-		MinOff:      0,
-	}
-	boiler := &Device{
-		Name:        "boiler",
-		Pin:         3,
-		LastChanged: now,
-		MinOn:       0,
-		MinOff:      0,
-	}
+		sources := controller.GetHeatSources(st)
 
-	return &Controller{
-		cfg: config.Config{
-			RoleRotationMinutes: 1440,
-		},
-		state: &model.SystemState{
-			SystemMode: model.ModeHeating,
-		},
-		boiler: boiler,
-		heatPumps: [2]*HeatPump{
-			{Name: "heat_pump_A", Relay: hpA, Role: "primary"},
-			{Name: "heat_pump_B", Relay: hpB, Role: "secondary"},
-		},
-		lastRoleRotation:     now,
-		roleRotationInterval: 24 * time.Hour,
-	}
-}
+		assert.NotNil(t, sources.Primary)
+		assert.Equal(t, "hp1", sources.Primary.Name)
+		assert.NotNil(t, sources.Secondary)
+		assert.Equal(t, "hp2", sources.Secondary.Name)
+		assert.NotNil(t, sources.Tertiary)
+		assert.Equal(t, "boiler1", sources.Tertiary.Name)
+	})
 
-func TestRotateHeatPumpRoles(t *testing.T) {
-	ctrl := makeFakeController()
+	t.Run("panics on multiple primaries", func(t *testing.T) {
+		st := &state.SystemState{
+			HeatPumps: []model.HeatPump{
+				{
+					Name:      "hp1",
+					IsPrimary: true,
+				},
+				{
+					Name:      "hp2",
+					IsPrimary: true,
+				},
+			},
+		}
 
-	primaryBefore := ctrl.getPrimary().Name
-	secondaryBefore := ctrl.getSecondary().Name
+		assert.Panics(t, func() {
+			controller.GetHeatSources(st)
+		})
+	})
 
-	ctrl.rotateHeatPumpRoles()
+	t.Run("returns nil tertiary when no boiler", func(t *testing.T) {
+		st := &state.SystemState{
+			HeatPumps: []model.HeatPump{
+				{
+					Name:      "hp1",
+					IsPrimary: true,
+				},
+				{
+					Name: "hp2",
+				},
+			},
+			Boilers: []model.Boiler{},
+		}
 
-	primaryAfter := ctrl.getPrimary().Name
-	secondaryAfter := ctrl.getSecondary().Name
-
-	if primaryBefore == primaryAfter {
-		t.Errorf("expected primary role to change, got same: %s", primaryAfter)
-	}
-	if secondaryBefore == secondaryAfter {
-		t.Errorf("expected secondary role to change, got same: %s", secondaryAfter)
-	}
+		sources := controller.GetHeatSources(st)
+		assert.Nil(t, sources.Tertiary)
+	})
 }
