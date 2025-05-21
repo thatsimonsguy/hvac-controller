@@ -157,5 +157,7 @@ func ReadSensorTemp(sensorPath string) float64 {
 		shutdown.ShutdownWithError(fmt.Errorf("failed to convert temperature to int: %w", err), "fatal sensor read failure")
 	}
 
-	return float64(tempMilliC) / 1000.0
+	// Celsius to Fahrenheit: F = C × 9/5 + 32
+	tempC := float64(tempMilliC) / 1000.0
+	return tempC*9.0/5.0 + 32.0
 }
