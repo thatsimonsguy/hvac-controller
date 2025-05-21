@@ -72,25 +72,13 @@
       "devices": [
         {
           "name": "heat_pump_A",
-          "gpiopin": {
-            "pin": 23,
-            "active_high": false
-          },
-          "mode_pin": {
-            "pin": 18,
-            "active_high": false
-          }
+          "pin": 23,
+          "mode_pin": 18
         },
         {
           "name": "heat_pump_B",
-          "gpiopin": {
-            "pin": 24,
-            "active_high": false
-          },
-          "mode_pin": {
-            "pin": 19,
-            "active_high": false
-          }
+          "pin": 24,
+          "mode_pin": 19
         }
       ]
     },
@@ -107,26 +95,14 @@
       "devices": [
         {
           "name": "main_floor_air_handler",
-          "gpiopin": {
-            "pin": 5,
-            "active_high": false
-          },
-          "circ_pump_pin": {
-            "pin": 6,
-            "active_high": false
-          },
+          "pin": 5,
+          "circ_pump_pin": 6,
           "zone": "main_floor"
         },
         {
           "name": "basement_air_handler",
-          "gpiopin": {
-            "pin": 12,
-            "active_high": false
-          },
-          "circ_pump_pin": {
-            "pin": 13,
-            "active_high": false
-          },
+          "pin": 12,
+          "circ_pump_pin": 13,
           "zone": "basement"
         }
       ]
@@ -142,18 +118,12 @@
       "devices": [
         {
           "name": "basement_radiant_loop",
-          "gpiopin": {
-            "pin": 16,
-            "active_high": false
-          },
+          "pin": 16,
           "zone": "basement"
         },
         {
           "name": "garage_radiant_loop",
-          "gpiopin": {
-            "pin": 17,
-            "active_high": false
-          },
+          "pin": 17,
           "zone": "garage"
         }
       ]
@@ -169,10 +139,7 @@
       "devices": [
         {
           "name": "boiler",
-          "gpiopin": {
-            "pin": 22,
-            "active_high": false
-          }
+          "pin": 22
         }
       ]
     }
