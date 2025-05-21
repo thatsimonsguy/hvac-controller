@@ -31,6 +31,10 @@ func RunBufferController() {
 			sensor := env.SystemState.SystemSensors["buffer_tank"]
 			sensorPath := filepath.Join("/sys/bus/w1/devices", sensor.Bus)
 			bufferTemp := gpio.ReadSensorTemp(sensorPath)
+			log.Info().
+				Str("mode", string(env.SystemState.SystemMode)).
+				Float64("buffer_temp", bufferTemp).
+				Msg("Evaluating buffer tank and heat sources")
 
 			// activate or deactivate heat sources if they should be and we can
 			if sources.Primary != nil {
