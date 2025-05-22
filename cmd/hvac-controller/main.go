@@ -9,6 +9,7 @@ import (
 
 	"github.com/thatsimonsguy/hvac-controller/internal/buffercontroller"
 	"github.com/thatsimonsguy/hvac-controller/internal/config"
+	"github.com/thatsimonsguy/hvac-controller/internal/datadog"
 	"github.com/thatsimonsguy/hvac-controller/internal/env"
 	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/logging"
@@ -21,6 +22,10 @@ import (
 func main() {
 	env.Cfg = config.Load()
 	logging.Init(env.Cfg.LogLevel)
+
+	if env.Cfg.EnableDatadog {
+		datadog.InitMetrics()
+	}
 
 	log.Info().
 		Str("state_file", env.Cfg.StateFilePath).

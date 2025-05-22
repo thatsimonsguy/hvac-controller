@@ -7,6 +7,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/thatsimonsguy/hvac-controller/internal/datadog"
 	"github.com/thatsimonsguy/hvac-controller/internal/device"
 	"github.com/thatsimonsguy/hvac-controller/internal/env"
 	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
@@ -37,6 +38,9 @@ func RunBufferController() {
 			sensor := env.SystemState.SystemSensors["buffer_tank"]
 			sensorPath := filepath.Join("/sys/bus/w1/devices", sensor.Bus)
 			bufferTemp := gpio.ReadSensorTemp(sensorPath)
+
+			datadog.Gauge("buffer_tank.temperature", bufferTemp, "component:sensor")
+
 			log.Info().
 				Str("mode", string(env.SystemState.SystemMode)).
 				Float64("buffer_temp", bufferTemp).

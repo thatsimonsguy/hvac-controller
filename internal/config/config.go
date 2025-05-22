@@ -42,6 +42,11 @@ type Config struct {
 	Zones         []model.Zone            `json:"zones"`
 	DeviceConfig  DeviceConfig            `json:"devices"`
 	SystemSensors map[string]model.Sensor `json:"system_sensors"`
+
+	EnableDatadog bool     `json:"enable_datadog"`
+	DDAgentAddr   string   `json:"dd_agent_addr"`
+	DDNamespace   string   `json:"dd_namespace"`
+	DDTags        []string `json:"dd_tags"`
 }
 
 // DeviceConfig and related structs
