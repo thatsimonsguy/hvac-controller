@@ -23,6 +23,12 @@ type HeatSources struct {
 func RunBufferController() {
 	go func() {
 		log.Info().Msg("Starting buffer tank controller")
+
+		// Sleep once at startup to honor min-off duration
+		sleepDuration := time.Duration(env.Cfg.DeviceConfig.HeatPumps.DeviceProfile.MinTimeOff) * time.Second
+		log.Info().Dur("sleep", sleepDuration).Msg("Initial delay to avoid startup flapping")
+		time.Sleep(sleepDuration)
+
 		for {
 			// refresh current source list to handle rotations and maintenance drops
 			sources := refreshSources()
