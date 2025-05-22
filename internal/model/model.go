@@ -52,8 +52,8 @@ type AirHandler struct {
 }
 
 type GPIOPin struct {
-	Number     int   `json:"pin"`
-	ActiveHigh *bool `json:"active_high"` // Optional: nil = input pin
+	Number     int  `json:"pin"`
+	ActiveHigh bool `json:"active_high"`
 }
 
 type Sensor struct {

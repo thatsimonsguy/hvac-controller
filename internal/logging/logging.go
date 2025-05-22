@@ -13,4 +13,8 @@ func Init(level zerolog.Level) {
 		Out:        os.Stderr,
 		TimeFormat: time.RFC3339,
 	}).Level(level)
+
+	if level == zerolog.DebugLevel {
+		log.Debug().Msg("Log level set to DEBUG")
+	}
 }

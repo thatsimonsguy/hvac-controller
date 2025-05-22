@@ -16,7 +16,7 @@ func WriteStartupScript() error {
 
 	write := func(label string, pin model.GPIOPin, active bool) {
 		drive := "dl"
-		if pin.ActiveHigh == &active {
+		if pin.ActiveHigh == active {
 			drive = "dh"
 		}
 		lines = append(lines, fmt.Sprintf("# %s", label))
