@@ -7,7 +7,7 @@
   "system_override_min_temp": 55,
   "system_override_max_temp": 90,
   "heating_threshold": 105.0,
-  "cooling_threshold": 38.0,
+  "cooling_threshold": 40.0,
   "spread": 5.0,
   "secondary_margin": 10.0,
   "tertiary_margin": 30.0,
