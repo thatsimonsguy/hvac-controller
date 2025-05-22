@@ -1,18 +1,23 @@
 package logging
 
 import (
+	"fmt"
 	"os"
-	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 func Init(level zerolog.Level) {
-	log.Logger = log.Output(zerolog.ConsoleWriter{
-		Out:        os.Stderr,
-		TimeFormat: time.RFC3339,
-	}).Level(level)
+	logFile, err := os.OpenFile("/var/log/hvac-controller.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(fmt.Errorf("failed to open log file: %w", err))
+	}
+
+	multi := zerolog.MultiLevelWriter(logFile)
+
+	logger := zerolog.New(multi).Level(level).With().Timestamp().Logger()
+	log.Logger = logger
 
 	if level == zerolog.DebugLevel {
 		log.Debug().Msg("Log level set to DEBUG")
