@@ -1,5 +1,5 @@
 // controller_unit_test.go
-package controller
+package buffercontroller
 
 import (
 	"errors"

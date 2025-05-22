@@ -7,12 +7,13 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/thatsimonsguy/hvac-controller/internal/buffercontroller"
 	"github.com/thatsimonsguy/hvac-controller/internal/config"
-	"github.com/thatsimonsguy/hvac-controller/internal/controller"
 	"github.com/thatsimonsguy/hvac-controller/internal/env"
 	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/logging"
 	"github.com/thatsimonsguy/hvac-controller/internal/state"
+	"github.com/thatsimonsguy/hvac-controller/internal/zonecontroller"
 	"github.com/thatsimonsguy/hvac-controller/system/shutdown"
 	"github.com/thatsimonsguy/hvac-controller/system/startup"
 )
@@ -60,9 +61,9 @@ func main() {
 	}
 
 	for _, zone := range env.SystemState.Zones {
-		controller.RunZoneController(zone)
+		zonecontroller.RunZoneController(zone)
 	}
-	controller.RunBufferController()
+	buffercontroller.RunBufferController()
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
