@@ -48,27 +48,39 @@ func TestGetThreshold(t *testing.T) {
 		CoolingThreshold: 70.0,
 		SecondaryMargin:  2.0,
 		TertiaryMargin:   5.0,
+		Spread:           1.0,
 	}
 
 	tests := []struct {
 		name     string
 		role     string
 		mode     model.SystemMode
+		active   bool
 		expected float64
 	}{
-		{"primary heating", "primary", model.ModeHeating, 50.0},
-		{"secondary heating", "secondary", model.ModeHeating, 48.0},
-		{"tertiary heating", "tertiary", model.ModeHeating, 45.0},
-		{"primary cooling", "primary", model.ModeCooling, 70.0},
-		{"secondary cooling", "secondary", model.ModeCooling, 72.0},
+		{"primary heating inactive", "primary", model.ModeHeating, false, 50.0},
+		{"primary heating active", "primary", model.ModeHeating, true, 50.0 + env.Cfg.Spread},
+
+		{"secondary heating inactive", "secondary", model.ModeHeating, false, 48.0},
+		{"secondary heating active", "secondary", model.ModeHeating, true, 48.0 + env.Cfg.Spread},
+
+		{"tertiary heating inactive", "tertiary", model.ModeHeating, false, 45.0},
+		{"tertiary heating active", "tertiary", model.ModeHeating, true, 45.0 + env.Cfg.Spread},
+
+		{"primary cooling inactive", "primary", model.ModeCooling, false, 70.0},
+		{"primary cooling active", "primary", model.ModeCooling, true, 70.0 - env.Cfg.Spread},
+
+		{"secondary cooling inactive", "secondary", model.ModeCooling, false, 72.0},
+		{"secondary cooling active", "secondary", model.ModeCooling, true, 72.0 - env.Cfg.Spread},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := getThreshold(tt.role, tt.mode)
+			actual := getThreshold(tt.role, tt.mode, tt.active)
 			assert.Equal(t, tt.expected, actual)
 		})
 	}
+
 }
 
 func TestGetThreshold_ShutdownCases(t *testing.T) {
@@ -79,13 +91,14 @@ func TestGetThreshold_ShutdownCases(t *testing.T) {
 	defer func() { shutdown.ExitFunc = os.Exit }()
 
 	tests := []struct {
-		name string
-		role string
-		mode model.SystemMode
+		name   string
+		role   string
+		mode   model.SystemMode
+		active bool
 	}{
-		{"invalid role", "invalid", model.ModeHeating},
-		{"tertiary in cooling mode", "tertiary", model.ModeCooling},
-		{"unknown mode", "primary", ""},
+		{"invalid role", "invalid", model.ModeHeating, true},
+		{"tertiary in cooling mode", "tertiary", model.ModeCooling, true},
+		{"unknown mode", "primary", "", false},
 	}
 
 	for _, tt := range tests {
@@ -96,7 +109,7 @@ func TestGetThreshold_ShutdownCases(t *testing.T) {
 				}
 			}()
 
-			_ = getThreshold(tt.role, tt.mode) // should panic
+			_ = getThreshold(tt.role, tt.mode, tt.active) // should panic
 		})
 	}
 }

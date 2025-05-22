@@ -121,7 +121,7 @@ func shouldBeOn(bt float64, threshold float64, mode model.SystemMode) bool {
 }
 
 var evaluateToggleSource = func(role string, bt float64, active bool, d *model.Device, mode model.SystemMode) bool {
-	threshold := getThreshold(role, mode)
+	threshold := getThreshold(role, mode, active)
 	should := shouldBeOn(bt, threshold, mode)
 
 	log.Debug().
@@ -140,32 +140,69 @@ var evaluateToggleSource = func(role string, bt float64, active bool, d *model.D
 	return device.CanToggle(d, time.Now())
 }
 
-func getThreshold(role string, mode model.SystemMode) float64 {
+func getThreshold(role string, mode model.SystemMode, active bool) float64 {
 	log.Debug().
 		Str("role", role).
 		Str("mode", string(mode)).
+		Bool("active", active).
 		Msg("Evaluating temperature threshold")
 
 	if role != "primary" && role != "secondary" && role != "tertiary" {
 		shutdown.ShutdownWithError(fmt.Errorf("invalid role definition: %s", role), "error setting temperature thresholds")
 	}
 
+	var (
+		// activation and deactivation thresholds are overlapped by spread to prevent flapping
+		baseHeat = env.Cfg.HeatingThreshold
+		baseCool = env.Cfg.CoolingThreshold
+
+		primaryHeatOn  = baseHeat
+		primaryHeatOff = baseHeat + env.Cfg.Spread
+
+		secondaryHeatOn  = baseHeat - env.Cfg.SecondaryMargin
+		secondaryHeatOff = secondaryHeatOn + env.Cfg.Spread
+
+		tertiaryHeatOn  = baseHeat - env.Cfg.TertiaryMargin
+		tertiaryHeatOff = tertiaryHeatOn + env.Cfg.Spread
+
+		primaryCoolOn  = baseCool
+		primaryCoolOff = baseCool - env.Cfg.Spread
+
+		secondaryCoolOn  = baseCool + env.Cfg.SecondaryMargin
+		secondaryCoolOff = secondaryCoolOn - env.Cfg.Spread
+	)
+
 	switch mode {
 	case model.ModeHeating:
 		switch role {
 		case "primary":
-			return env.Cfg.HeatingThreshold
+			if active {
+				return primaryHeatOff
+			}
+			return primaryHeatOn
 		case "secondary":
-			return env.Cfg.HeatingThreshold - env.Cfg.SecondaryMargin
+			if active {
+				return secondaryHeatOff
+			}
+			return secondaryHeatOn
 		case "tertiary":
-			return env.Cfg.HeatingThreshold - env.Cfg.TertiaryMargin
+			if active {
+				return tertiaryHeatOff
+			}
+			return tertiaryHeatOn
 		}
 	case model.ModeCooling:
 		switch role {
 		case "primary":
-			return env.Cfg.CoolingThreshold
+			if active {
+				return primaryCoolOff
+			}
+			return primaryCoolOn
 		case "secondary":
-			return env.Cfg.CoolingThreshold + env.Cfg.SecondaryMargin
+			if active {
+				return secondaryCoolOff
+			}
+			return secondaryCoolOn
 		case "tertiary":
 			shutdown.ShutdownWithError(fmt.Errorf("invalid tertiary in cooling mode"), "heat source list composition failure")
 		}
