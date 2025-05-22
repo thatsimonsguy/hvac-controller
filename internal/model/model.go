@@ -22,8 +22,8 @@ type Zone struct {
 type Device struct {
 	Name        string
 	Pin         GPIOPin
-	MinOn       time.Duration // TODO: populate from config
-	MinOff      time.Duration // TODO: populate from config
+	MinOn       time.Duration
+	MinOff      time.Duration
 	Online      bool
 	LastChanged time.Time
 	ActiveModes []string

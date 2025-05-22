@@ -25,7 +25,7 @@ func RunBufferController() {
 		log.Info().Msg("Starting buffer tank controller")
 
 		// Sleep once at startup to honor min-off duration
-		sleepDuration := time.Duration(env.Cfg.DeviceConfig.HeatPumps.DeviceProfile.MinTimeOff) * time.Second
+		sleepDuration := time.Duration(env.Cfg.DeviceConfig.HeatPumps.DeviceProfile.MinTimeOff) * time.Minute
 		log.Info().Dur("sleep", sleepDuration).Msg("Initial delay to avoid startup flapping")
 		time.Sleep(sleepDuration)
 
@@ -123,6 +123,15 @@ func shouldBeOn(bt float64, threshold float64, mode model.SystemMode) bool {
 var evaluateToggleSource = func(role string, bt float64, active bool, d *model.Device, mode model.SystemMode) bool {
 	threshold := getThreshold(role, mode)
 	should := shouldBeOn(bt, threshold, mode)
+
+	log.Debug().
+		Str("role", role).
+		Float64("buffer_temp", bt).
+		Float64("threshold", threshold).
+		Str("mode", string(mode)).
+		Bool("currently_active", active).
+		Bool("should_be_on", should).
+		Msg("Evaluating toggle condition")
 
 	if should == active {
 		return false
