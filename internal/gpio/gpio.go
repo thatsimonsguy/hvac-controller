@@ -62,7 +62,7 @@ func ValidateInitialPinStates() error {
 		if err != nil {
 			return fmt.Errorf("failed to read pin level for %s (GPIO %d): %w", check.Name, check.Pin.Number, err)
 		}
-		isActive := (*check.Pin.ActiveHigh && level) || (!*check.Pin.ActiveHigh && !level)
+		isActive := (check.Pin.ActiveHigh && level) || (!check.Pin.ActiveHigh && !level)
 		if isActive != check.ShouldBeOn {
 			return fmt.Errorf("pin %d (%s) is in wrong state at startup (expected active=%v)", check.Pin.Number, check.Name, check.ShouldBeOn)
 		}
@@ -97,7 +97,7 @@ func Activate(pin model.GPIOPin) {
 		return
 	}
 
-	if *pin.ActiveHigh {
+	if pin.ActiveHigh {
 		err := pinctrl.SetPin(pin.Number, "op", "pn", "dh")
 		if err != nil {
 			shutdown.ShutdownWithError(err, fmt.Sprintf("Failed to activate pin %d", pin.Number))
@@ -116,7 +116,7 @@ func Deactivate(pin model.GPIOPin) {
 		return
 	}
 
-	if *pin.ActiveHigh {
+	if pin.ActiveHigh {
 		err := pinctrl.SetPin(pin.Number, "op", "pn", "dl")
 		if err != nil {
 			shutdown.ShutdownWithError(err, fmt.Sprintf("Failed to deactivate pin %d", pin.Number))
@@ -132,7 +132,7 @@ func Deactivate(pin model.GPIOPin) {
 
 func CurrentlyActive(pin model.GPIOPin) bool {
 	level := Read(pin)
-	return pin.ActiveHigh == &level
+	return pin.ActiveHigh == level
 }
 
 func ReadSensorTemp(sensorPath string) float64 {
