@@ -1,6 +1,7 @@
 {
   "state_file_path": "data/",
   "boot_script_file_path": "/usr/local/bin/configure-gpio.sh",
+  "logging_file_path": "/var/log/hvac-controller.log",
   "os_service_path": "/etc/systemd/system/configure-gpio.service",
   "zone_max_temp": 85,
   "zone_min_temp": 60,
