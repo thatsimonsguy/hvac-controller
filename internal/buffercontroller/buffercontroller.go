@@ -1,4 +1,4 @@
-package controller
+package buffercontroller
 
 import (
 	"fmt"
@@ -220,16 +220,6 @@ func refreshSources() HeatSources {
 		Secondary: newSecondary,
 		Tertiary:  newTertiary,
 	}
-}
-
-func RunZoneController(zone model.Zone) {
-	go func() {
-		log.Info().Str("zone", zone.ID).Msg("Starting zone controller")
-		for {
-			// TODO: Read zone temp, compare to setpoint, activate/deactivate loop or air handler
-			time.Sleep(time.Duration(env.Cfg.PollIntervalSeconds) * time.Second)
-		}
-	}()
 }
 
 func getHeatSources() HeatSources {
