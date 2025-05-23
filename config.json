@@ -91,8 +91,8 @@
     },
     "air_handlers": {
       "device_profile": {
-        "min_time_on": 5,
-        "min_time_off": 3,
+        "min_time_on": 3,
+        "min_time_off": 1,
         "active_modes": [
           "heating",
           "cooling",

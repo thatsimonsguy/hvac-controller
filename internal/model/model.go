@@ -17,6 +17,7 @@ type Zone struct {
 	Setpoint     float64  `json:"setpoint"`
 	Capabilities []string `json:"capabilities"` // e.g. ["heating", "cooling"]
 	Sensor       Sensor   `json:"sensor"`
+	Mode         SystemMode
 }
 
 type Device struct {
