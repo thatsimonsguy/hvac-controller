@@ -92,7 +92,7 @@ func Read(pin model.GPIOPin) bool {
 	return level
 }
 
-func Activate(pin model.GPIOPin) {
+var Activate = func(pin model.GPIOPin) {
 	if safeMode {
 		return
 	}
@@ -111,7 +111,7 @@ func Activate(pin model.GPIOPin) {
 	}
 }
 
-func Deactivate(pin model.GPIOPin) {
+var Deactivate = func(pin model.GPIOPin) {
 	if safeMode {
 		return
 	}
@@ -130,12 +130,12 @@ func Deactivate(pin model.GPIOPin) {
 	}
 }
 
-func CurrentlyActive(pin model.GPIOPin) bool {
+var CurrentlyActive = func(pin model.GPIOPin) bool {
 	level := Read(pin)
 	return pin.ActiveHigh == level
 }
 
-func ReadSensorTemp(sensorPath string) float64 {
+var ReadSensorTemp = func(sensorPath string) float64 {
 	file := filepath.Join(sensorPath, "w1_slave")
 	data, err := os.ReadFile(file)
 	if err != nil {
