@@ -2,6 +2,7 @@ package zonecontroller
 
 import (
 	"fmt"
+	"math/rand"
 	"path/filepath"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 )
 
 const ZoneSpread float64 = 0.5
+const HeatingSecondaryThreshold float64 = 3
 
 func RunZoneController(zone model.Zone) {
 	go func() {
@@ -22,7 +24,7 @@ func RunZoneController(zone model.Zone) {
 
 		// Sleep for handler.minOff at first run
 		if handler := getAirHandler(zone.ID); handler != nil {
-			time.Sleep(handler.MinOff)
+			time.Sleep(handler.MinOff + time.Duration(rand.Intn(1500))*time.Millisecond)
 		}
 
 		for {
@@ -43,24 +45,54 @@ func RunZoneController(zone model.Zone) {
 				continue
 			}
 
-			// Get the handler
+			// Get distribution devices
 			handler := getAirHandler(zone.ID)
-			if handler == nil {
-				log.Error().Str("zone_id", zone.ID).Msg("No air handler associated with zone")
+			loop := getRadiantLoop(zone.ID)
+			if handler == nil && loop == nil {
+				log.Error().Str("zone_id", zone.ID).Msg("No distribution device associated with zone")
 				continue
 			}
 
 			// Continue if we can't change the state
-			if !device.CanToggle(&handler.Device, time.Now()) {
+			skipHandler := true
+			skipLoop := true
+
+			if handler != nil && device.CanToggle(&handler.Device, time.Now()) {
+				skipHandler = false
+			}
+			if loop != nil && device.CanToggle(&loop.Device, time.Now()) {
+				skipLoop = false
+			}
+
+			if skipHandler && skipLoop {
 				continue
 			}
 
-			// Get active states for blower and pump
-			blowerActive := gpio.CurrentlyActive(handler.Pin)
-			pumpActive := gpio.CurrentlyActive(handler.CircPumpPin)
+			// Get active states for devices
+			blowerActive := false
+			pumpActive := false
+			loopActive := false
+
+			if handler != nil {
+				blowerActive = gpio.CurrentlyActive(handler.Pin)
+				pumpActive = gpio.CurrentlyActive(handler.CircPumpPin)
+			}
+			if loop != nil {
+				loopActive = gpio.CurrentlyActive(loop.Pin)
+			}
 
 			// Make sure the blower is on if the zone is set to circulate
 			if zone.Mode == model.ModeCirculate {
+
+				// API should validate zone mode requests to block this
+				if handler == nil {
+					log.Error().
+						Str("zone", zone.ID).
+						Msg("Zone set to circulate with no air handler")
+
+					continue
+				}
+
 				if blowerActive {
 					if pumpActive {
 						// turn off pump if we just switched from heat/cool to circulate
@@ -76,7 +108,8 @@ func RunZoneController(zone model.Zone) {
 			// Evaluate heating and cooling modes
 			sensorPath := filepath.Join("/sys/bus/w1/devices", zone.Sensor.Bus)
 			zoneTemp := gpio.ReadSensorTemp(sensorPath)
-			threshold := getThreshold(zone, pumpActive)
+			threshold := getThreshold(zone, pumpActive, false)
+			secondaryThreshold := getThreshold(zone, pumpActive, true)
 
 			datadog.Gauge("zone.temperature", zoneTemp, "component:sensor", fmt.Sprintf("zone:%s", zone.ID))
 
@@ -89,22 +122,73 @@ func RunZoneController(zone model.Zone) {
 				Str("mode", string(zone.Mode)).
 				Msg("Zone temperature check")
 
-			// Activate/deactivate air handler or leave on/off
-			if shouldBeOn(zoneTemp, threshold, zone.Mode) {
-				if pumpActive {
-					continue
+			// Control logic for zone with loop only
+			if handler == nil && loop != nil {
+				// Only operate radiant loops in heating mode
+				if zone.Mode == model.ModeHeating {
+					should := shouldBeOn(zoneTemp, threshold, zone.Mode)
+					if should && !loopActive {
+						device.ActivateRadiantLoop(loop)
+					}
+					if !should && loopActive {
+						device.DeactivateRadiantLoop(loop)
+					}
 				}
-				device.ActivateAirHandler(handler)
+				// Continue if in cooling or should == active
 				continue
 			}
-			if pumpActive {
-				device.DeactivateAirHandler(handler)
+
+			// Control logic for zone with handler only
+			if loop == nil && handler != nil {
+				should := shouldBeOn(zoneTemp, threshold, zone.Mode)
+				if should && !pumpActive {
+					device.ActivateAirHandler(handler)
+				}
+				if !should && pumpActive {
+					device.DeactivateAirHandler(handler)
+				}
+				// Continue if should == active
+				continue
+			}
+
+			// Control logic for zone with both handler and loop
+			if handler != nil && loop != nil {
+
+				// Ignore loop in cooling mode
+				if zone.Mode == model.ModeCooling {
+					should := shouldBeOn(zoneTemp, threshold, zone.Mode)
+					if should && !pumpActive {
+						device.ActivateAirHandler(handler)
+					}
+					if !should && pumpActive {
+						device.DeactivateAirHandler(handler)
+					}
+					// Continue if should == active
+					continue
+				}
+
+				// Heating mode
+				// Loop is primary, preferred distributor
+				if shouldBeOn(zoneTemp, threshold, zone.Mode) && !loopActive {
+					device.ActivateRadiantLoop(loop)
+				}
+				if !shouldBeOn(zoneTemp, threshold, zone.Mode) && loopActive {
+					device.DeactivateRadiantLoop(loop)
+				}
+
+				// Air Handler kicks in if loop is lagging
+				if shouldBeOn(zoneTemp, secondaryThreshold, zone.Mode) && !pumpActive {
+					device.ActivateAirHandler(handler)
+				}
+				if !shouldBeOn(zoneTemp, secondaryThreshold, zone.Mode) && pumpActive {
+					device.DeactivateAirHandler(handler)
+				}
 			}
 		}
 	}()
 }
 
-func getThreshold(zone model.Zone, active bool) float64 {
+func getThreshold(zone model.Zone, active bool, secondary bool) float64 {
 	log.Debug().
 		Str("zone", zone.Label).
 		Str("mode", string(zone.Mode)).
@@ -119,11 +203,20 @@ func getThreshold(zone model.Zone, active bool) float64 {
 
 		coolOn  = base + ZoneSpread
 		coolOff = base - ZoneSpread
+
+		backupHeatOn  = base - ZoneSpread - HeatingSecondaryThreshold
+		backupHeatOff = base + ZoneSpread - HeatingSecondaryThreshold
 	)
 
 	if zone.Mode == model.ModeHeating {
+		if active && secondary {
+			return backupHeatOff
+		}
 		if active {
 			return heatOff
+		}
+		if secondary {
+			return backupHeatOn
 		}
 		return heatOn
 	}
@@ -142,6 +235,15 @@ func getAirHandler(zoneID string) *model.AirHandler {
 	for i, ah := range env.SystemState.AirHandlers {
 		if ah.Zone != nil && ah.Zone.ID == zoneID {
 			return &env.SystemState.AirHandlers[i]
+		}
+	}
+	return nil
+}
+
+func getRadiantLoop(zoneID string) *model.RadiantFloorLoop {
+	for i, rl := range env.SystemState.RadiantLoops {
+		if rl.Zone != nil && rl.Zone.ID == zoneID {
+			return &env.SystemState.RadiantLoops[i]
 		}
 	}
 	return nil
