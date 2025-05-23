@@ -85,6 +85,8 @@ func hydrateZones() []model.Zone {
 			Label:        z.Label,
 			Setpoint:     z.Setpoint,
 			Capabilities: z.Capabilities,
+			Sensor:       z.Sensor,
+			Mode:         model.ModeOff,
 		})
 	}
 	return zones
@@ -188,6 +190,8 @@ func buildZoneLookup() map[string]*model.Zone {
 			Label:        z.Label,
 			Setpoint:     z.Setpoint,
 			Capabilities: z.Capabilities,
+			Sensor:       z.Sensor,
+			Mode:         z.Mode,
 		}
 	}
 	return zoneLookup
