@@ -66,7 +66,7 @@ func main() {
 	}
 
 	for _, zone := range env.SystemState.Zones {
-		zonecontroller.RunZoneController(zone)
+		zonecontroller.RunZoneController(&zone)
 	}
 	buffercontroller.RunBufferController()
 

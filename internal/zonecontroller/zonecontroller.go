@@ -18,7 +18,7 @@ import (
 const ZoneSpread float64 = 0.5
 const HeatingSecondaryThreshold float64 = 3
 
-func RunZoneController(zone model.Zone) {
+func RunZoneController(zone *model.Zone) {
 	go func() {
 		log.Info().Str("zone", zone.ID).Msg("Starting zone controller")
 
@@ -53,19 +53,18 @@ func RunZoneController(zone model.Zone) {
 				continue
 			}
 
-			// Continue if we can't change the state
-			skipHandler := true
-			skipLoop := true
+			handlerNil := handler == nil
+			loopNil := loop == nil
 
-			if handler != nil && device.CanToggle(&handler.Device, time.Now()) {
-				skipHandler = false
-			}
-			if loop != nil && device.CanToggle(&loop.Device, time.Now()) {
-				skipLoop = false
-			}
+			// Get toggleable statuses
+			canToggleHandler := false
+			canToggleLoop := false
 
-			if skipHandler && skipLoop {
-				continue
+			if !handlerNil {
+				canToggleHandler = device.CanToggle(&handler.Device, time.Now())
+			}
+			if !loopNil {
+				canToggleLoop = device.CanToggle(&loop.Device, time.Now())
 			}
 
 			// Get active states for devices
@@ -81,31 +80,7 @@ func RunZoneController(zone model.Zone) {
 				loopActive = gpio.CurrentlyActive(loop.Pin)
 			}
 
-			// Make sure the blower is on if the zone is set to circulate
-			if zone.Mode == model.ModeCirculate {
-
-				// API should validate zone mode requests to block this
-				if handler == nil {
-					log.Error().
-						Str("zone", zone.ID).
-						Msg("Zone set to circulate with no air handler")
-
-					continue
-				}
-
-				if blowerActive {
-					if pumpActive {
-						// turn off pump if we just switched from heat/cool to circulate
-						gpio.Deactivate(handler.CircPumpPin)
-						continue
-					}
-					continue
-				}
-				gpio.Activate(handler.Pin)
-				continue
-			}
-
-			// Evaluate heating and cooling modes
+			// Get temps
 			sensorPath := filepath.Join("/sys/bus/w1/devices", zone.Sensor.Bus)
 			zoneTemp := gpio.ReadSensorTemp(sensorPath)
 			threshold := getThreshold(zone, pumpActive, false)
@@ -122,73 +97,175 @@ func RunZoneController(zone model.Zone) {
 				Str("mode", string(zone.Mode)).
 				Msg("Zone temperature check")
 
-			// Control logic for zone with loop only
-			if handler == nil && loop != nil {
-				// Only operate radiant loops in heating mode
-				if zone.Mode == model.ModeHeating {
-					should := shouldBeOn(zoneTemp, threshold, zone.Mode)
-					if should && !loopActive {
-						device.ActivateRadiantLoop(loop)
-					}
-					if !should && loopActive {
-						device.DeactivateRadiantLoop(loop)
-					}
-				}
-				// Continue if in cooling or should == active
-				continue
-			}
+			// Run evaluation logic
+			switchMap := evaluateZoneActions(
+				zone.ID,
+				handler == nil,
+				blowerActive,
+				pumpActive,
+				loop == nil,
+				loopActive,
+				canToggleHandler,
+				canToggleLoop,
+				zoneTemp,
+				zone.Mode,
+				threshold,
+				secondaryThreshold,
+			)
 
-			// Control logic for zone with handler only
-			if loop == nil && handler != nil {
-				should := shouldBeOn(zoneTemp, threshold, zone.Mode)
-				if should && !pumpActive {
+			if handler != nil {
+				if switchMap["activate_blower"] {
+					device.ActivateBlower(handler)
+				}
+				if switchMap["deactivate_blower"] {
+					device.DeactivateBlower(handler)
+				}
+				if switchMap["activate_pump"] {
 					device.ActivateAirHandler(handler)
 				}
-				if !should && pumpActive {
+				if switchMap["deactivate_pump"] {
 					device.DeactivateAirHandler(handler)
 				}
-				// Continue if should == active
-				continue
 			}
 
-			// Control logic for zone with both handler and loop
-			if handler != nil && loop != nil {
-
-				// Ignore loop in cooling mode
-				if zone.Mode == model.ModeCooling {
-					should := shouldBeOn(zoneTemp, threshold, zone.Mode)
-					if should && !pumpActive {
-						device.ActivateAirHandler(handler)
-					}
-					if !should && pumpActive {
-						device.DeactivateAirHandler(handler)
-					}
-					// Continue if should == active
-					continue
-				}
-
-				// Heating mode
-				// Loop is primary, preferred distributor
-				if shouldBeOn(zoneTemp, threshold, zone.Mode) && !loopActive {
+			if loop != nil {
+				if switchMap["activate_loop"] {
 					device.ActivateRadiantLoop(loop)
 				}
-				if !shouldBeOn(zoneTemp, threshold, zone.Mode) && loopActive {
+				if switchMap["deactivate_loop"] {
 					device.DeactivateRadiantLoop(loop)
 				}
-
-				// Air Handler kicks in if loop is lagging
-				if shouldBeOn(zoneTemp, secondaryThreshold, zone.Mode) && !pumpActive {
-					device.ActivateAirHandler(handler)
-				}
-				if !shouldBeOn(zoneTemp, secondaryThreshold, zone.Mode) && pumpActive {
-					device.DeactivateAirHandler(handler)
-				}
 			}
+
 		}
 	}()
 }
 
-func getThreshold(zone model.Zone, active bool, secondary bool) float64 {
+func evaluateZoneActions(
+	zoneID string,
+	handlerNil bool,
+	blowerActive bool,
+	pumpActive bool,
+	loopNil bool,
+	loopActive bool,
+	canToggleHandler bool,
+	canToggleLoop bool,
+	temp float64,
+	mode model.SystemMode,
+	threshold float64,
+	secondaryThreshold float64,
+) map[string]bool {
+	switchThings := map[string]bool{
+		"activate_blower":   false,
+		"activate_pump":     false,
+		"activate_loop":     false,
+		"deactivate_blower": false,
+		"deactivate_pump":   false,
+		"deactivate_loop":   false,
+	}
+
+	shouldPrimary := shouldBeOn(temp, threshold, mode)
+	shouldSecondary := shouldBeOn(temp, secondaryThreshold, mode)
+
+	// Early out if we can't change the state
+	skipHandler := true
+	skipLoop := true
+
+	if !handlerNil && canToggleHandler {
+		skipHandler = false
+	}
+	if !loopNil && canToggleLoop {
+		skipLoop = false
+	}
+
+	if skipHandler && skipLoop {
+		return switchThings
+	}
+
+	// Make sure the blower is on if the zone is set to circulate
+	if mode == model.ModeCirculate {
+
+		// API should validate zone mode requests to block this
+		if handlerNil {
+			log.Error().
+				Str("zone", zoneID).
+				Msg("Zone set to circulate with no air handler")
+
+			return switchThings
+		}
+
+		if blowerActive {
+			if pumpActive {
+				// turn off pump if we just switched from heat/cool to circulate
+				switchThings["deactivate_pump"] = true
+			}
+		}
+		switchThings["activate_blower"] = true
+		return switchThings
+	}
+
+	// Loop only
+	if handlerNil && !loopNil {
+		if mode == model.ModeHeating {
+			if shouldPrimary && !loopActive {
+				switchThings["activate_loop"] = true
+			}
+			if !shouldPrimary && loopActive {
+				switchThings["deactivate_loop"] = true
+			}
+		}
+		return switchThings
+	}
+
+	// Handler only
+	if loopNil && !handlerNil {
+		if shouldPrimary && !pumpActive {
+			switchThings["activate_blower"] = true
+			switchThings["activate_pump"] = true
+		}
+		if !shouldPrimary && pumpActive {
+			switchThings["deactivate_blower"] = true
+			switchThings["deactivate_pump"] = true
+		}
+		return switchThings
+	}
+
+	// Both handler and loop
+	if !handlerNil && !loopNil {
+		if mode == model.ModeCooling {
+			if shouldPrimary && !pumpActive {
+				switchThings["activate_blower"] = true
+				switchThings["activate_pump"] = true
+			}
+			if !shouldPrimary && pumpActive {
+				switchThings["deactivate_blower"] = true
+				switchThings["deactivate_pump"] = true
+			}
+			return switchThings
+		}
+
+		// Heating mode logic
+		if shouldPrimary && !loopActive {
+			switchThings["activate_loop"] = true
+		}
+		if !shouldPrimary && loopActive {
+			switchThings["deactivate_loop"] = true
+		}
+
+		if shouldSecondary && !pumpActive {
+			switchThings["activate_blower"] = true
+			switchThings["activate_pump"] = true
+		}
+		if !shouldSecondary && pumpActive {
+			switchThings["deactivate_blower"] = true
+			switchThings["deactivate_pump"] = true
+		}
+	}
+
+	return switchThings
+}
+
+func getThreshold(zone *model.Zone, active bool, secondary bool) float64 {
 	log.Debug().
 		Str("zone", zone.Label).
 		Str("mode", string(zone.Mode)).
