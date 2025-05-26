@@ -4,9 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/thatsimonsguy/hvac-controller/internal/config"
@@ -14,6 +15,7 @@ import (
 )
 
 var cfg *config.Config
+var schemaPath = "db/schema.sqlite" // not putting this is config, since the schema is actively part of the codebase and not an artifact of it
 
 func InitConfig(c *config.Config) {
 	cfg = c
@@ -28,10 +30,37 @@ func InitializeIfMissing() error {
 		}
 		f.Close()
 		os.Chmod(cfg.DBPath, 0660) // Optional: Set desired permissions
+
+		// Apply the schema
+		if err := ApplySchema(); err != nil {
+			return err
+		}
 		// Seed the database
 		return SeedDatabase()
 	}
 	return nil // DB file exists, no action needed
+}
+
+func ApplySchema() error {
+	db, err := sql.Open("sqlite3", cfg.DBPath)
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+	defer db.Close()
+
+	schemaBytes, err := os.ReadFile(schemaPath)
+	if err != nil {
+		return fmt.Errorf("failed to read schema file: %w", err)
+	}
+	schema := string(schemaBytes)
+
+	_, err = db.Exec(schema)
+	if err != nil {
+		return fmt.Errorf("failed to apply schema: %w", err)
+	}
+
+	log.Info().Str("path", schemaPath).Msg("Schema successfully applied")
+	return nil
 }
 
 func SeedDatabase() error {
@@ -106,7 +135,7 @@ func SeedDatabase() error {
 		return fmt.Errorf("failed to commit seed transaction: %w", err)
 	}
 
-	log.Printf("Database seeded at %s from config", cfg.DBPath)
+	log.Info().Str("path", cfg.DBPath).Msg("Database seeded from config")
 	return nil
 }
 
@@ -130,8 +159,9 @@ func ValidateDatabase() error {
 		if err != nil {
 			return fmt.Errorf("failed to query table %s: %w", table, err)
 		}
-		log.Printf("Table %s has %d records", table, count)
+		log.Debug().Str("table", table).Int("records", count).Msg("Table validated")
 	}
 
+	log.Info().Msg("Database validated")
 	return nil
 }
