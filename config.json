@@ -1,4 +1,5 @@
 {
+  "dbPath": "data/data.sqlite",
   "state_file_path": "data/",
   "boot_script_file_path": "/usr/local/bin/configure-gpio.sh",
   "logging_file_path": "/var/log/hvac-controller.log",

@@ -15,6 +15,7 @@ type Sensors map[string]string // e.g. "garage_temp" => "28-xxxxxx"
 
 type Config struct {
 	ConfigFile         string
+	DBPath             string `json:"dbPath"`
 	StateFilePath      string `json:"state_file_path"`
 	BootScriptFilePath string `json:"boot_script_file_path"`
 	OSServicePath      string `json:"os_service_path"`

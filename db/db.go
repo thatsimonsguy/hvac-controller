@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -18,8 +19,23 @@ func InitConfig(c *config.Config) {
 	cfg = c
 }
 
-func SeedDatabase(dbPath string) error {
-	db, err := sql.Open("sqlite3", dbPath)
+func InitializeIfMissing() error {
+	if _, err := os.Stat(cfg.DBPath); os.IsNotExist(err) {
+		// Touch the file and set permissions
+		f, err := os.Create(cfg.DBPath)
+		if err != nil {
+			return fmt.Errorf("failed to create database file: %w", err)
+		}
+		f.Close()
+		os.Chmod(cfg.DBPath, 0660) // Optional: Set desired permissions
+		// Seed the database
+		return SeedDatabase()
+	}
+	return nil // DB file exists, no action needed
+}
+
+func SeedDatabase() error {
+	db, err := sql.Open("sqlite3", cfg.DBPath)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
@@ -90,7 +106,7 @@ func SeedDatabase(dbPath string) error {
 		return fmt.Errorf("failed to commit seed transaction: %w", err)
 	}
 
-	log.Printf("Database seeded at %s from config", dbPath)
+	log.Printf("Database seeded at %s from config", cfg.DBPath)
 	return nil
 }
 
@@ -99,8 +115,8 @@ func marshalJSON(v interface{}) string {
 	return string(b)
 }
 
-func ValidateDatabase(dbPath string) error {
-	db, err := sql.Open("sqlite3", dbPath)
+func ValidateDatabase() error {
+	db, err := sql.Open("sqlite3", cfg.DBPath)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}

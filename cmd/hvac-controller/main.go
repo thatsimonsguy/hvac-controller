@@ -7,6 +7,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/thatsimonsguy/hvac-controller/db"
 	"github.com/thatsimonsguy/hvac-controller/internal/config"
 	"github.com/thatsimonsguy/hvac-controller/internal/controllers/buffercontroller"
 	"github.com/thatsimonsguy/hvac-controller/internal/controllers/zonecontroller"
@@ -25,6 +26,15 @@ func main() {
 
 	if env.Cfg.EnableDatadog {
 		datadog.InitMetrics()
+	}
+
+	// Initialize the DB
+	db.InitConfig(env.Cfg)
+	if err := db.InitializeIfMissing(); err != nil {
+		shutdown.ShutdownWithError(err, "Failed to initialize database")
+	}
+	if err := db.ValidateDatabase(); err != nil {
+		shutdown.ShutdownWithError(err, "Failed to validate database")
 	}
 
 	log.Info().
