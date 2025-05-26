@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS devices (
     role TEXT NOT NULL DEFAULT 'source',  -- New column: 'source' or 'distributor'
     zone_id TEXT REFERENCES zones(id) ON DELETE SET NULL,  -- Nullable FK to zones
     circ_pump_pin_number INTEGER,  -- For air handlers only
-    circ_pump_pin_active_high BOOLEAN,-
+    circ_pump_pin_active_high BOOLEAN,
     mode_pin_number INTEGER,  -- For heat pumps only
     mode_pin_active_high BOOLEAN,
     is_primary BOOLEAN,  -- For heat pumps only

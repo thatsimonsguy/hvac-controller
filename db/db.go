@@ -15,7 +15,7 @@ import (
 )
 
 var cfg *config.Config
-var schemaPath = "db/schema.sqlite" // not putting this is config, since the schema is actively part of the codebase and not an artifact of it
+var schemaPath = "db/schema.sql" // not putting this is config, since the schema is actively part of the codebase and not an artifact of it
 
 func InitConfig(c *config.Config) {
 	cfg = c
