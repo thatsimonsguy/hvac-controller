@@ -129,10 +129,9 @@ func TestGetHeatSources(t *testing.T) {
 			Device: model.Device{Name: "b1"},
 		}
 
-		env.SystemState = &state.SystemState{
-			HeatPumps: []model.HeatPump{hp1, hp2},
-			Boilers:   []model.Boiler{boiler},
-		}
+		env.SystemState = state.NewSystemStateFromConfig()
+		env.SystemState.HeatPumps = []model.HeatPump{hp1, hp2}
+		env.SystemState.Boilers = []model.Boiler{boiler}
 
 		sources := getHeatSources()
 		assert.Equal(t, "hp1", sources.Primary.Name)
@@ -160,9 +159,8 @@ func TestGetHeatSources(t *testing.T) {
 			IsPrimary: true,
 		}
 
-		env.SystemState = &state.SystemState{
-			HeatPumps: []model.HeatPump{hp1, hp2},
-		}
+		env.SystemState = state.NewSystemStateFromConfig()
+		env.SystemState.HeatPumps = []model.HeatPump{hp1, hp2}
 
 		getHeatSources()
 
@@ -181,10 +179,9 @@ func TestGetHeatSources(t *testing.T) {
 			Device: model.Device{Name: "b1"},
 		}
 
-		env.SystemState = &state.SystemState{
-			HeatPumps: []model.HeatPump{hp1},
-			Boilers:   []model.Boiler{boiler},
-		}
+		env.SystemState = state.NewSystemStateFromConfig()
+		env.SystemState.HeatPumps = []model.HeatPump{hp1}
+		env.SystemState.Boilers = []model.Boiler{boiler}
 
 		sources := getHeatSources()
 		assert.Nil(t, sources.Primary)
@@ -215,10 +212,9 @@ func TestRefreshSources(t *testing.T) {
 	}
 
 	t.Run("rotates primary if LastRotated exceeds RoleRotationMinutes", func(t *testing.T) {
-		env.SystemState = &state.SystemState{
-			SystemMode: model.ModeHeating,
-			HeatPumps:  []model.HeatPump{baseHP1, baseHP2},
-		}
+		env.SystemState = state.NewSystemStateFromConfig()
+		env.SystemState.SystemMode = model.ModeHeating
+		env.SystemState.HeatPumps = []model.HeatPump{baseHP1, baseHP2}
 		env.Cfg.RoleRotationMinutes = 10 // rotation threshold = 10 min
 
 		result := refreshSources()
@@ -235,10 +231,9 @@ func TestRefreshSources(t *testing.T) {
 		hp1.LastRotated = now.Add(-5 * time.Minute)
 		hp2.LastRotated = now.Add(-5 * time.Minute)
 
-		env.SystemState = &state.SystemState{
-			SystemMode: model.ModeHeating,
-			HeatPumps:  []model.HeatPump{hp1, hp2},
-		}
+		env.SystemState = state.NewSystemStateFromConfig()
+		env.SystemState.SystemMode = model.ModeHeating
+		env.SystemState.HeatPumps = []model.HeatPump{hp1, hp2}
 		env.Cfg.RoleRotationMinutes = 10 // too soon
 
 		result := refreshSources()
@@ -255,11 +250,10 @@ func TestRefreshSources(t *testing.T) {
 			},
 		}
 
-		env.SystemState = &state.SystemState{
-			SystemMode: model.ModeHeating,
-			HeatPumps:  []model.HeatPump{baseHP1, baseHP2},
-			Boilers:    []model.Boiler{boiler},
-		}
+		env.SystemState = state.NewSystemStateFromConfig()
+		env.SystemState.SystemMode = model.ModeHeating
+		env.SystemState.HeatPumps = []model.HeatPump{baseHP1, baseHP2}
+		env.SystemState.Boilers = []model.Boiler{boiler}
 		env.Cfg.RoleRotationMinutes = 10
 
 		result := refreshSources()
@@ -275,11 +269,10 @@ func TestRefreshSources(t *testing.T) {
 			},
 		}
 
-		env.SystemState = &state.SystemState{
-			SystemMode: model.ModeCooling,
-			HeatPumps:  []model.HeatPump{baseHP1, baseHP2},
-			Boilers:    []model.Boiler{boiler},
-		}
+		env.SystemState = state.NewSystemStateFromConfig()
+		env.SystemState.SystemMode = model.ModeCooling
+		env.SystemState.HeatPumps = []model.HeatPump{baseHP1, baseHP2}
+		env.SystemState.Boilers = []model.Boiler{boiler}
 		env.Cfg.RoleRotationMinutes = 10
 
 		result := refreshSources()
