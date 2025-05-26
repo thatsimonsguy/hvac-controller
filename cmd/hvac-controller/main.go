@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"os"
 	"os/signal"
 	"syscall"
@@ -36,6 +37,13 @@ func main() {
 	if err := db.ValidateDatabase(); err != nil {
 		shutdown.ShutdownWithError(err, "Failed to validate database")
 	}
+
+	// Create DB connection
+	dbConn, err := sql.Open("sqlite3", env.Cfg.DBPath)
+	if err != nil {
+		shutdown.ShutdownWithError(err, "Failed to connect to database")
+	}
+	defer dbConn.Close()
 
 	log.Info().
 		Str("state_file", env.Cfg.StateFilePath).
@@ -78,7 +86,7 @@ func main() {
 	for _, zone := range env.SystemState.Zones {
 		zonecontroller.RunZoneController(&zone)
 	}
-	buffercontroller.RunBufferController()
+	buffercontroller.RunBufferController(dbConn)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)

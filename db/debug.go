@@ -12,15 +12,7 @@ func SetSystemModeCLI(dbPath, mode string) error {
 		return err
 	}
 	defer dbConn.Close()
-	tx, err := StartTransaction(dbConn)
-	if err != nil {
-		return err
-	}
-	if err := SetSystemModeWithTx(tx, model.SystemMode(mode)); err != nil {
-		RollbackTransaction(tx)
-		return err
-	}
-	return CommitTransaction(tx)
+	return UpdateSystemMode(dbConn, model.SystemMode(mode))
 }
 
 func SetZoneModeCLI(dbPath, zoneID, mode string) error {
@@ -29,16 +21,7 @@ func SetZoneModeCLI(dbPath, zoneID, mode string) error {
 		return err
 	}
 	defer db.Close()
-
-	tx, err := StartTransaction(db)
-	if err != nil {
-		return err
-	}
-	if err := UpdateZoneModeWithTx(tx, zoneID, model.SystemMode(mode)); err != nil {
-		RollbackTransaction(tx)
-		return err
-	}
-	return CommitTransaction(tx)
+	return UpdateZoneMode(db, zoneID, model.SystemMode(mode))
 }
 
 func SetZoneSetpointCLI(dbPath, zoneID string, setpoint float64) error {
@@ -47,13 +30,5 @@ func SetZoneSetpointCLI(dbPath, zoneID string, setpoint float64) error {
 		return err
 	}
 	defer db.Close()
-	tx, err := StartTransaction(db)
-	if err != nil {
-		return err
-	}
-	if err := UpdateZoneSetpointWithTx(tx, zoneID, setpoint); err != nil {
-		RollbackTransaction(tx)
-		return err
-	}
-	return CommitTransaction(tx)
+	return UpdateZoneSetpoint(db, zoneID, setpoint)
 }

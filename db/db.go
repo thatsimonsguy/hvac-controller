@@ -101,9 +101,10 @@ func SeedDatabase() error {
 	}
 
 	// Insert devices from config with role assignment
-	for _, d := range cfg.DeviceConfig.HeatPumps.Devices {
+	for i, d := range cfg.DeviceConfig.HeatPumps.Devices {
+		primary := i == 0 // Mark the first HP as primary
 		_, err = tx.Exec(`INSERT INTO devices (name, pin_number, pin_active_high, min_on, min_off, online, last_changed, active_modes, device_type, role, zone_id, mode_pin_number, mode_pin_active_high, is_primary, last_rotated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			d.Name, d.Pin, cfg.RelayBoardActiveHigh, int(cfg.DeviceConfig.HeatPumps.DeviceProfile.MinTimeOn*60), int(cfg.DeviceConfig.HeatPumps.DeviceProfile.MinTimeOff*60), true, time.Now().Format(time.RFC3339), marshalJSON(cfg.DeviceConfig.HeatPumps.DeviceProfile.ActiveModes), "heat_pump", "source", nil, d.ModePin, cfg.RelayBoardActiveHigh, false, time.Now().Format(time.RFC3339))
+			d.Name, d.Pin, cfg.RelayBoardActiveHigh, int(cfg.DeviceConfig.HeatPumps.DeviceProfile.MinTimeOn*60), int(cfg.DeviceConfig.HeatPumps.DeviceProfile.MinTimeOff*60), true, time.Now().Format(time.RFC3339), marshalJSON(cfg.DeviceConfig.HeatPumps.DeviceProfile.ActiveModes), "heat_pump", "source", nil, d.ModePin, cfg.RelayBoardActiveHigh, primary, time.Now().Format(time.RFC3339))
 		if err != nil {
 			return fmt.Errorf("failed to insert heat pump %s: %w", d.Name, err)
 		}

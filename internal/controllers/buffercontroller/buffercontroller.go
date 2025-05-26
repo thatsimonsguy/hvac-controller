@@ -1,12 +1,14 @@
 package buffercontroller
 
 import (
+	"database/sql"
 	"fmt"
 	"path/filepath"
 	"time"
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/thatsimonsguy/hvac-controller/db"
 	"github.com/thatsimonsguy/hvac-controller/internal/datadog"
 	"github.com/thatsimonsguy/hvac-controller/internal/device"
 	"github.com/thatsimonsguy/hvac-controller/internal/env"
@@ -21,9 +23,14 @@ type HeatSources struct {
 	Tertiary  *model.Boiler
 }
 
-func RunBufferController() {
+func RunBufferController(dbConn *sql.DB) {
 	go func() {
 		log.Info().Msg("Starting buffer tank controller")
+
+		sensor, err := db.GetSensorByID(dbConn, "buffer_tank")
+		if err != nil {
+			log.Error().Err(err).Str("sensor id", "buffer_tank").Msg("Could not retrieve sensor")
+		}
 
 		// Sleep once at startup to honor min-off duration
 		sleepDuration := time.Duration(env.Cfg.DeviceConfig.HeatPumps.DeviceProfile.MinTimeOff) * time.Minute
@@ -32,17 +39,22 @@ func RunBufferController() {
 
 		for {
 			// refresh current source list to handle rotations and maintenance drops
-			sources := refreshSources()
+			sources := refreshSources(dbConn)
 
 			// get buffer tank temp
-			sensor := env.SystemState.SystemSensors["buffer_tank"]
 			sensorPath := filepath.Join("/sys/bus/w1/devices", sensor.Bus)
 			bufferTemp := gpio.ReadSensorTemp(sensorPath)
 
 			datadog.Gauge("buffer_tank.temperature", bufferTemp, "component:sensor")
 
+			// get system mode
+			mode, err := db.GetSystemMode(dbConn)
+			if err != nil {
+				log.Error().Err(err).Msg("Could nor retrieve system mode from db")
+			}
+
 			log.Info().
-				Str("mode", string(env.SystemState.SystemMode)).
+				Str("mode", string(mode)).
 				Float64("buffer_temp", bufferTemp).
 				Msg("Evaluating buffer tank and heat sources")
 
@@ -53,7 +65,7 @@ func RunBufferController() {
 					sources.Primary.Device,
 					gpio.CurrentlyActive(sources.Primary.Pin),
 					bufferTemp,
-					env.SystemState.SystemMode,
+					mode,
 					func() { device.ActivateHeatPump(sources.Primary) },
 					func() { device.DeactivateHeatPump(sources.Primary) },
 				)
@@ -65,7 +77,7 @@ func RunBufferController() {
 					sources.Secondary.Device,
 					gpio.CurrentlyActive(sources.Secondary.Pin),
 					bufferTemp,
-					env.SystemState.SystemMode,
+					mode,
 					func() { device.ActivateHeatPump(sources.Secondary) },
 					func() { device.DeactivateHeatPump(sources.Secondary) },
 				)
@@ -77,7 +89,7 @@ func RunBufferController() {
 					sources.Tertiary.Device,
 					gpio.CurrentlyActive(sources.Tertiary.Pin),
 					bufferTemp,
-					env.SystemState.SystemMode,
+					mode,
 					func() { device.ActivateBoiler(sources.Tertiary) },
 					func() { device.DeactivateBoiler(sources.Tertiary) },
 				)
@@ -217,14 +229,18 @@ func getThreshold(role string, mode model.SystemMode, active bool) float64 {
 	return 0.0
 }
 
-func refreshSources() HeatSources {
+var refreshSources = func(dbConn *sql.DB) HeatSources {
 	var newPrimary *model.HeatPump
 	var newSecondary *model.HeatPump
 	var newTertiary *model.Boiler
 
-	mode := env.SystemState.SystemMode
+	mode, err := db.GetSystemMode(dbConn)
+	if err != nil {
+		shutdown.ShutdownWithError(err, "Could not get system mode")
+	}
+
 	now := time.Now()
-	sources := getHeatSources()
+	sources := getHeatSources(dbConn)
 
 	// verify that we have some heat source we can use in our current mode
 	offlineCool := !sources.Primary.Online && !sources.Secondary.Online && mode == model.ModeCooling
@@ -237,12 +253,14 @@ func refreshSources() HeatSources {
 	if sources.Primary.Online && sources.Secondary.Online {
 		if now.Sub(sources.Primary.LastRotated) > time.Duration(env.Cfg.RoleRotationMinutes)*time.Minute {
 			log.Info().Msgf("Rotating heat pump primary from %s to %s", sources.Primary.Name, sources.Secondary.Name)
-			sources.Primary.IsPrimary = false
-			sources.Secondary.IsPrimary = true
-			sources.Primary.LastRotated = now
-			sources.Secondary.LastRotated = now
 			newPrimary = sources.Secondary
 			newSecondary = sources.Primary
+
+			err = db.SwapPrimaryHeatPump(dbConn)
+			if err != nil {
+				log.Error().Err(err).Msg("Could not swap primary and secondary heatpumps")
+			}
+
 		} else {
 			newPrimary = sources.Primary
 			newSecondary = sources.Secondary
@@ -278,26 +296,41 @@ func refreshSources() HeatSources {
 	}
 }
 
-func getHeatSources() HeatSources {
+var getHeatSources = func(dbConn *sql.DB) HeatSources {
 	var primary *model.HeatPump
 	var secondary *model.HeatPump
 	var tertiary *model.Boiler
 	var foundPrimary bool
 
-	for i := range env.SystemState.HeatPumps {
-		hp := &env.SystemState.HeatPumps[i]
+	hps, err := db.GetHeatPumps(dbConn)
+	if err != nil {
+		shutdown.ShutdownWithError(err, "Could not retrieve heat pumps from db")
+	}
+
+	// Identify primary and secondary heat pumps and check for duplication
+	for i := range hps {
+		hp := hps[i]
 		if hp.IsPrimary {
 			if foundPrimary {
-				shutdown.ShutdownWithError(fmt.Errorf("multiple heat pumps marked as primary"), "statefile validation error")
+				shutdown.ShutdownWithError(fmt.Errorf("multiple heat pumps marked as primary"), "state validation error")
 			}
 			foundPrimary = true
-			primary = hp
+			primary = &hp
 		} else {
-			secondary = hp
+			secondary = &hp
 		}
 	}
-	if len(env.SystemState.Boilers) > 0 {
-		tertiary = &env.SystemState.Boilers[0]
+	if !foundPrimary {
+		shutdown.ShutdownWithError(fmt.Errorf("no heat pumps marked as primary"), "state validation error")
+	}
+
+	boilers, err := db.GetBoilers(dbConn)
+	if err != nil {
+		shutdown.ShutdownWithError(err, "Could not retrieve boilers from db")
+	}
+
+	if len(boilers) > 0 && boilers[0].Online {
+		tertiary = &boilers[0]
 	}
 
 	return HeatSources{
