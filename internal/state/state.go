@@ -2,20 +2,13 @@ package state
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/thatsimonsguy/hvac-controller/internal/config"
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
-)
-
-var (
-	// ErrZoneNotFound is returned when a zone with the given ID is not found
-	ErrZoneNotFound = errors.New("zone not found")
 )
 
 var cfg *config.Config
@@ -25,7 +18,6 @@ func Init(c *config.Config) {
 }
 
 type SystemState struct {
-	mu               sync.RWMutex
 	SystemMode       model.SystemMode         `json:"system_mode"`
 	Zones            []model.Zone             `json:"zones"`
 	HeatPumps        []model.HeatPump         `json:"heat_pumps"`
@@ -65,83 +57,7 @@ func LoadSystemState(path string) (*SystemState, error) {
 	return &state, nil
 }
 
-// SetSystemMode safely updates the system mode
-func (s *SystemState) SetSystemMode(mode model.SystemMode) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.SystemMode = mode
-}
-
-// GetSystemMode safely retrieves the current system mode
-func (s *SystemState) GetSystemMode() model.SystemMode {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.SystemMode
-}
-
-// findZoneIndex returns the index of the zone with the given ID, or -1 if not found
-// Caller must hold at least a read lock
-func (s *SystemState) findZoneIndex(zoneID string) int {
-	for i, zone := range s.Zones {
-		if zone.ID == zoneID {
-			return i
-		}
-	}
-	return -1
-}
-
-// SetZoneSetpoint safely updates the setpoint for a specific zone
-func (s *SystemState) SetZoneSetpoint(zoneID string, setpoint float64) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if i := s.findZoneIndex(zoneID); i != -1 {
-		s.Zones[i].Setpoint = setpoint
-		return nil
-	}
-	return ErrZoneNotFound
-}
-
-// SetZoneMode safely updates the mode for a specific zone
-func (s *SystemState) SetZoneMode(zoneID string, mode model.SystemMode) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if i := s.findZoneIndex(zoneID); i != -1 {
-		s.Zones[i].Mode = mode
-		return nil
-	}
-	return ErrZoneNotFound
-}
-
-// GetZone safely retrieves a copy of a zone by ID
-func (s *SystemState) GetZone(zoneID string) (model.Zone, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if i := s.findZoneIndex(zoneID); i != -1 {
-		return s.Zones[i], nil
-	}
-	return model.Zone{}, ErrZoneNotFound
-}
-
-// GetAllZones safely retrieves a copy of all zones
-func (s *SystemState) GetAllZones() []model.Zone {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	// Return a deep copy to prevent external modifications
-	zones := make([]model.Zone, len(s.Zones))
-	copy(zones, s.Zones)
-	return zones
-}
-
-// SaveSystemState saves the current state to disk in a thread-safe manner
 func SaveSystemState(path string, state *SystemState) error {
-	// Create a copy of the state while holding a read lock
-	state.mu.RLock()
-	defer state.mu.RUnlock()
-
 	tmp := filepath.Join(path, "state.json.tmp")
 	out := filepath.Join(path, "state.json")
 	log.Info().Str("resolved_path", filepath.Join(path, "state.json")).Msg("Saving system state")
