@@ -7,14 +7,14 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/thatsimonsguy/hvac-controller/internal/buffercontroller"
 	"github.com/thatsimonsguy/hvac-controller/internal/config"
+	"github.com/thatsimonsguy/hvac-controller/internal/controllers/buffercontroller"
+	"github.com/thatsimonsguy/hvac-controller/internal/controllers/zonecontroller"
 	"github.com/thatsimonsguy/hvac-controller/internal/datadog"
 	"github.com/thatsimonsguy/hvac-controller/internal/env"
 	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/logging"
 	"github.com/thatsimonsguy/hvac-controller/internal/state"
-	"github.com/thatsimonsguy/hvac-controller/internal/zonecontroller"
 	"github.com/thatsimonsguy/hvac-controller/system/shutdown"
 	"github.com/thatsimonsguy/hvac-controller/system/startup"
 )
