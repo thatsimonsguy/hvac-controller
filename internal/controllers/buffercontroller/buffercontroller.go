@@ -23,6 +23,20 @@ type HeatSources struct {
 	Tertiary  *model.Boiler
 }
 
+type HeatSourcesProvider interface {
+	GetHeatSources(dbConn *sql.DB) HeatSources
+}
+
+type SourceRefresher struct {
+	Provider HeatSourcesProvider
+}
+
+type RealProvider struct{}
+
+func (RealProvider) GetHeatSources(dbConn *sql.DB) HeatSources {
+	return GetHeatSources(dbConn)
+}
+
 func RunBufferController(dbConn *sql.DB) {
 	go func() {
 		log.Info().Msg("Starting buffer tank controller")
@@ -32,6 +46,9 @@ func RunBufferController(dbConn *sql.DB) {
 			log.Error().Err(err).Str("sensor id", "buffer_tank").Msg("Could not retrieve sensor")
 		}
 
+		// Create SourceRefresher with the real provider
+		refresher := SourceRefresher{Provider: RealProvider{}}
+
 		// Sleep once at startup to honor min-off duration
 		sleepDuration := time.Duration(env.Cfg.DeviceConfig.HeatPumps.DeviceProfile.MinTimeOff) * time.Minute
 		log.Info().Dur("sleep", sleepDuration).Msg("Initial delay to avoid startup flapping")
@@ -39,7 +56,7 @@ func RunBufferController(dbConn *sql.DB) {
 
 		for {
 			// refresh current source list to handle rotations and maintenance drops
-			sources := refreshSources(dbConn)
+			sources := refresher.RefreshSources(dbConn)
 
 			// get buffer tank temp
 			sensorPath := filepath.Join("/sys/bus/w1/devices", sensor.Bus)
@@ -60,7 +77,7 @@ func RunBufferController(dbConn *sql.DB) {
 
 			// activate or deactivate heat sources if they should be and we can
 			if sources.Primary != nil {
-				evaluateAndToggle(
+				EvaluateAndToggle(
 					"primary",
 					sources.Primary.Device,
 					gpio.CurrentlyActive(sources.Primary.Pin),
@@ -72,7 +89,7 @@ func RunBufferController(dbConn *sql.DB) {
 			}
 
 			if sources.Secondary != nil {
-				evaluateAndToggle(
+				EvaluateAndToggle(
 					"secondary",
 					sources.Secondary.Device,
 					gpio.CurrentlyActive(sources.Secondary.Pin),
@@ -84,7 +101,7 @@ func RunBufferController(dbConn *sql.DB) {
 			}
 
 			if sources.Tertiary != nil {
-				evaluateAndToggle(
+				EvaluateAndToggle(
 					"tertiary",
 					sources.Tertiary.Device,
 					gpio.CurrentlyActive(sources.Tertiary.Pin),
@@ -100,7 +117,7 @@ func RunBufferController(dbConn *sql.DB) {
 	}()
 }
 
-func evaluateAndToggle(
+func EvaluateAndToggle(
 	role string,
 	source model.Device,
 	active bool,
@@ -113,7 +130,7 @@ func evaluateAndToggle(
 		return // early out for modes that don't use the buffer tank
 	}
 
-	shouldToggle := evaluateToggleSource(role, bufferTemp, active, &source, mode)
+	shouldToggle := EvaluateToggleSource(role, bufferTemp, active, &source, mode)
 
 	if shouldToggle && active {
 		log.Info().Str("device", source.Name).Msgf("Deactivating %s", role)
@@ -125,7 +142,7 @@ func evaluateAndToggle(
 	}
 }
 
-func shouldBeOn(bt float64, threshold float64, mode model.SystemMode) bool {
+func ShouldBeOn(bt float64, threshold float64, mode model.SystemMode) bool {
 	switch mode {
 	case model.ModeHeating:
 		return bt < threshold
@@ -136,9 +153,9 @@ func shouldBeOn(bt float64, threshold float64, mode model.SystemMode) bool {
 	}
 }
 
-var evaluateToggleSource = func(role string, bt float64, active bool, d *model.Device, mode model.SystemMode) bool {
-	threshold := getThreshold(role, mode, active)
-	should := shouldBeOn(bt, threshold, mode)
+var EvaluateToggleSource = func(role string, bt float64, active bool, d *model.Device, mode model.SystemMode) bool {
+	threshold := GetThreshold(role, mode, active)
+	should := ShouldBeOn(bt, threshold, mode)
 
 	log.Debug().
 		Str("role", role).
@@ -156,7 +173,7 @@ var evaluateToggleSource = func(role string, bt float64, active bool, d *model.D
 	return device.CanToggle(d, time.Now())
 }
 
-func getThreshold(role string, mode model.SystemMode, active bool) float64 {
+func GetThreshold(role string, mode model.SystemMode, active bool) float64 {
 	log.Debug().
 		Str("role", role).
 		Str("mode", string(mode)).
@@ -229,7 +246,7 @@ func getThreshold(role string, mode model.SystemMode, active bool) float64 {
 	return 0.0
 }
 
-var refreshSources = func(dbConn *sql.DB) HeatSources {
+func (r *SourceRefresher) RefreshSources(dbConn *sql.DB) HeatSources {
 	var newPrimary *model.HeatPump
 	var newSecondary *model.HeatPump
 	var newTertiary *model.Boiler
@@ -240,16 +257,14 @@ var refreshSources = func(dbConn *sql.DB) HeatSources {
 	}
 
 	now := time.Now()
-	sources := getHeatSources(dbConn)
+	sources := r.Provider.GetHeatSources(dbConn)
 
-	// verify that we have some heat source we can use in our current mode
 	offlineCool := !sources.Primary.Online && !sources.Secondary.Online && mode == model.ModeCooling
 	offlineHeat := !sources.Primary.Online && !sources.Secondary.Online && !sources.Tertiary.Online
 	if offlineCool || offlineHeat {
 		log.Warn().Msg("No eligible heat sources are online.")
 	}
 
-	// happy path: both heat pumps online
 	if sources.Primary.Online && sources.Secondary.Online {
 		if now.Sub(sources.Primary.LastRotated) > time.Duration(env.Cfg.RoleRotationMinutes)*time.Minute {
 			log.Info().Msgf("Rotating heat pump primary from %s to %s", sources.Primary.Name, sources.Secondary.Name)
@@ -260,14 +275,12 @@ var refreshSources = func(dbConn *sql.DB) HeatSources {
 			if err != nil {
 				log.Error().Err(err).Msg("Could not swap primary and secondary heatpumps")
 			}
-
 		} else {
 			newPrimary = sources.Primary
 			newSecondary = sources.Secondary
 		}
 	}
 
-	// one heat pump offline
 	if sources.Primary.Online != sources.Secondary.Online {
 		if sources.Primary.Online {
 			newPrimary = sources.Primary
@@ -277,7 +290,6 @@ var refreshSources = func(dbConn *sql.DB) HeatSources {
 		newSecondary = nil
 	}
 
-	// both heat pumps offline
 	if !sources.Primary.Online && !sources.Secondary.Online {
 		newPrimary = nil
 		newSecondary = nil
@@ -296,7 +308,7 @@ var refreshSources = func(dbConn *sql.DB) HeatSources {
 	}
 }
 
-var getHeatSources = func(dbConn *sql.DB) HeatSources {
+var GetHeatSources = func(dbConn *sql.DB) HeatSources {
 	var primary *model.HeatPump
 	var secondary *model.HeatPump
 	var tertiary *model.Boiler
