@@ -83,11 +83,20 @@ func SeedDatabase() error {
 		return fmt.Errorf("failed to insert system record: %w", err)
 	}
 
-	// Insert sensors
+	// Insert system sensors
 	for _, s := range cfg.SystemSensors {
 		_, err = tx.Exec(`INSERT OR REPLACE INTO sensors (id, bus) VALUES (?, ?)`, s.ID, s.Bus)
 		if err != nil {
-			return fmt.Errorf("failed to insert sensor %s: %w", s.ID, err)
+			return fmt.Errorf("failed to insert system sensor %s: %w", s.ID, err)
+		}
+	}
+
+	// Insert zone sensors
+	for _, z := range cfg.Zones {
+		sensor := z.Sensor
+		_, err = tx.Exec(`INSERT OR REPLACE INTO sensors (id, bus) VALUES (?, ?)`, sensor.ID, sensor.Bus)
+		if err != nil {
+			return fmt.Errorf("failed to insert zone sensor %s: %w", sensor.ID, err)
 		}
 	}
 
