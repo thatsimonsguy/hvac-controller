@@ -42,15 +42,15 @@ func GetAllZones(db *sql.DB) ([]model.Zone, error) {
 }
 
 // GetZoneByID retrieves a specific zone by its ID.
-func GetZoneByID(db *sql.DB, id string) (model.Zone, error) {
+func GetZoneByID(db *sql.DB, id string) (*model.Zone, error) {
 	var z model.Zone
 	var capabilities string
 	err := db.QueryRow(`SELECT id, label, setpoint, mode, capabilities, sensor_id FROM zones WHERE id = ?`, id).Scan(&z.ID, &z.Label, &z.Setpoint, &z.Mode, &capabilities, &z.Sensor.ID)
 	if err != nil {
-		return z, fmt.Errorf("failed to get zone %s: %w", id, err)
+		return &z, fmt.Errorf("failed to get zone %s: %w", id, err)
 	}
 	json.Unmarshal([]byte(capabilities), &z.Capabilities)
-	return z, nil
+	return &z, nil
 }
 
 // Sensor queries
@@ -73,13 +73,13 @@ func GetAllSensors(db *sql.DB) ([]model.Sensor, error) {
 	return sensors, nil
 }
 
-func GetSensorByID(db *sql.DB, id string) (model.Sensor, error) {
+func GetSensorByID(db *sql.DB, id string) (*model.Sensor, error) {
 	var s model.Sensor
 	err := db.QueryRow(`SELECT id, bus FROM sensors WHERE id = ?`, id).Scan(&s.ID, &s.Bus)
 	if err != nil {
-		return s, fmt.Errorf("failed to get sensor %s: %w", id, err)
+		return &s, fmt.Errorf("failed to get sensor %s: %w", id, err)
 	}
-	return s, nil
+	return &s, nil
 }
 
 // GetHeatPumps retrieves all heat pumps from the database.
@@ -212,4 +212,85 @@ func GetRadiantLoops(db *sql.DB) ([]model.RadiantFloorLoop, error) {
 		radiantLoops = append(radiantLoops, rf)
 	}
 	return radiantLoops, nil
+}
+
+// GetAirHandlerByID retrieves a single air handler by device name (ID).
+func GetAirHandlerByID(db *sql.DB, id string) (*model.AirHandler, error) {
+	rows, err := db.Query(`SELECT name, pin_number, pin_active_high, min_on, min_off, online, last_changed, active_modes, zone_id, circ_pump_pin_number, circ_pump_pin_active_high FROM devices WHERE device_type = 'air_handler' AND name = ?`, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query air handler %s: %w", id, err)
+	}
+	defer rows.Close()
+
+	var airHandlers []model.AirHandler
+	for rows.Next() {
+		var d model.Device
+		var activeModes string
+		var lastChanged sql.NullString
+		var zoneID string
+		var circPumpPinNumber int
+		var circPumpPinActiveHigh bool
+
+		err = rows.Scan(&d.Name, &d.Pin.Number, &d.Pin.ActiveHigh, &d.MinOn, &d.MinOff, &d.Online, &lastChanged, &activeModes, &zoneID, &circPumpPinNumber, &circPumpPinActiveHigh)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan air handler: %w", err)
+		}
+		json.Unmarshal([]byte(activeModes), &d.ActiveModes)
+		if lastChanged.Valid {
+			d.LastChanged, _ = time.Parse(time.RFC3339, lastChanged.String)
+		}
+		ah := model.AirHandler{
+			Device:      d,
+			Zone:        &model.Zone{ID: zoneID},
+			CircPumpPin: model.GPIOPin{Number: circPumpPinNumber, ActiveHigh: circPumpPinActiveHigh},
+		}
+		airHandlers = append(airHandlers, ah)
+	}
+
+	if len(airHandlers) == 0 {
+		return nil, nil // Valid case for garage zone: no air handler found
+	}
+	if len(airHandlers) > 1 {
+		return &airHandlers[0], fmt.Errorf("warning: multiple air handlers found for ID %s", id)
+	}
+	return &airHandlers[0], nil
+}
+
+// GetRadiantLoopByID retrieves a single radiant floor loop by device name (ID).
+func GetRadiantLoopByID(db *sql.DB, id string) (*model.RadiantFloorLoop, error) {
+	rows, err := db.Query(`SELECT name, pin_number, pin_active_high, min_on, min_off, online, last_changed, active_modes, zone_id FROM devices WHERE device_type = 'radiant_floor' AND name = ?`, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query radiant loop %s: %w", id, err)
+	}
+	defer rows.Close()
+
+	var radiantLoops []model.RadiantFloorLoop
+	for rows.Next() {
+		var d model.Device
+		var activeModes string
+		var lastChanged sql.NullString
+		var zoneID string
+
+		err = rows.Scan(&d.Name, &d.Pin.Number, &d.Pin.ActiveHigh, &d.MinOn, &d.MinOff, &d.Online, &lastChanged, &activeModes, &zoneID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan radiant loop: %w", err)
+		}
+		json.Unmarshal([]byte(activeModes), &d.ActiveModes)
+		if lastChanged.Valid {
+			d.LastChanged, _ = time.Parse(time.RFC3339, lastChanged.String)
+		}
+		rf := model.RadiantFloorLoop{
+			Device: d,
+			Zone:   &model.Zone{ID: zoneID},
+		}
+		radiantLoops = append(radiantLoops, rf)
+	}
+
+	if len(radiantLoops) == 0 {
+		return nil, nil // Valid case for main floor: no radiant loop found
+	}
+	if len(radiantLoops) > 1 {
+		return &radiantLoops[0], fmt.Errorf("warning: multiple radiant loops found for ID %s", id)
+	}
+	return &radiantLoops[0], nil
 }

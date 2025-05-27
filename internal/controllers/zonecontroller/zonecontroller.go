@@ -1,6 +1,7 @@
 package zonecontroller
 
 import (
+	"database/sql"
 	"fmt"
 	"math/rand"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/thatsimonsguy/hvac-controller/db"
 	"github.com/thatsimonsguy/hvac-controller/internal/datadog"
 	"github.com/thatsimonsguy/hvac-controller/internal/device"
 	"github.com/thatsimonsguy/hvac-controller/internal/env"
@@ -18,52 +20,58 @@ import (
 const ZoneSpread float64 = 0.5
 const HeatingSecondaryThreshold float64 = 3
 
-func RunZoneController(zone *model.Zone) {
+func RunZoneController(zone *model.Zone, dbConn *sql.DB) {
 	go func() {
 		log.Info().Str("zone", zone.ID).Msg("Starting zone controller")
 
-		// Sleep for handler.minOff at first run
-		if handler := getAirHandler(zone.ID); handler != nil {
-			time.Sleep(handler.MinOff + time.Duration(rand.Intn(1500))*time.Millisecond)
+		sensor, err := db.GetSensorByID(dbConn, zone.ID)
+		if err != nil {
+			log.Error().Err(err).Str("sensor id", zone.ID).Msg("Could not retrieve sensor")
 		}
+
+		// Sleep for 3 mins at first run, relatively safe assumed minOff
+		jitter := time.Duration(rand.Intn(10000)) * time.Millisecond // stagger cycle activation for all async routines
+		time.Sleep(3 * time.Minute + jitter)
 
 		for {
 			time.Sleep(time.Duration(env.Cfg.PollIntervalSeconds) * time.Second)
 
-			// Early out if zone if off
-			if zone.Mode == model.ModeOff {
+			// Refresh zone from db
+			zone, err = db.GetZoneByID(dbConn, zone.ID)
+			if err != nil {
+				log.Error().Err(err).Str("zone", zone.ID).Msg("Could not retrieve zone from db")
 				continue
 			}
 
-			// Log an error and early out if the system and zone modes conflict
-			if isOppositeMode(zone.Mode, env.SystemState.SystemMode) {
-				log.Error().
-					Str("zone", zone.ID).
-					Str("zone_mode", string(zone.Mode)).
-					Str("system_mode", string(env.SystemState.SystemMode)).
-					Msg("Zone mode is opposite of system mode — skipping control cycle")
-				continue
+			// Get temp
+			sensorPath := filepath.Join("/sys/bus/w1/devices", sensor.Bus)
+			zoneTemp := gpio.ReadSensorTempWithRetries(sensorPath, 5)
+
+			// Get system mode
+			sysMode, err := db.GetSystemMode(dbConn)
+			if err != nil {
+				log.Error().Err(err).Msg("Could not retrieve system mode from db")
 			}
 
 			// Get distribution devices
-			handler := getAirHandler(zone.ID)
-			loop := getRadiantLoop(zone.ID)
-			if handler == nil && loop == nil {
-				log.Error().Str("zone_id", zone.ID).Msg("No distribution device associated with zone")
-				continue
-			}
 
-			handlerNil := handler == nil
-			loopNil := loop == nil
+			handler, err := db.GetAirHandlerByID(dbConn, zone.ID)
+			if err != nil {
+				log.Error().Err(err).Str("zone", zone.ID).Msg("could not retrieve air handler for zone")
+			}
+			loop, err := db.GetRadiantLoopByID(dbConn, zone.ID)
+			if err != nil {
+				log.Error().Err(err).Str("zone", zone.ID).Msg("could not retrieve radiant loop for zone")
+			}
 
 			// Get toggleable statuses
 			canToggleHandler := false
 			canToggleLoop := false
 
-			if !handlerNil {
+			if handler != nil {
 				canToggleHandler = device.CanToggle(&handler.Device, time.Now())
 			}
-			if !loopNil {
+			if loop != nil {
 				canToggleLoop = device.CanToggle(&loop.Device, time.Now())
 			}
 
@@ -80,9 +88,6 @@ func RunZoneController(zone *model.Zone) {
 				loopActive = gpio.CurrentlyActive(loop.Pin)
 			}
 
-			// Get temps
-			sensorPath := filepath.Join("/sys/bus/w1/devices", zone.Sensor.Bus)
-			zoneTemp := gpio.ReadSensorTempWithRetries(sensorPath, 5)
 			threshold := getThreshold(zone, pumpActive, false)
 			secondaryThreshold := getThreshold(zone, pumpActive, true)
 
@@ -98,21 +103,50 @@ func RunZoneController(zone *model.Zone) {
 				Msg("Zone temperature check")
 
 			// Run evaluation logic
-			switchMap := evaluateZoneActions(
+			switchMap, err := evaluateZoneActions(
 				zone.ID,
-				handler == nil,
 				blowerActive,
 				pumpActive,
-				loop == nil,
 				loopActive,
+				handler,
+				loop,
 				canToggleHandler,
 				canToggleLoop,
 				zoneTemp,
 				zone.Mode,
+				sysMode,
 				threshold,
 				secondaryThreshold,
 			)
+			if err != nil {
+				log.Error().Err(err).Str("zone", zone.ID).Msg("zone evaluation failure")
+				
+				log.Debug().Err(err).Str("zone", zone.ID).
+				Bool("blower_active", blowerActive).
+				Bool("pump_active", pumpActive).
+				Bool("loop_active", loopActive).
+				Bool("handler_is_nil", handler == nil).
+				Bool("loop_is_nil", loop == nil).
+				Bool("can_toggle_handler", canToggleHandler).
+				Bool("can_toggle_loop", canToggleLoop).
+				Float64("zone_temp", zoneTemp).
+				Str("zone_mode", string(zone.Mode)).
+				Str("system_mode", string(sysMode)).
+				Float64("thresdhold", threshold).
+				Float64("secondary_threshold", secondaryThreshold).Msg("debug: zone evaluation failure")
+				
+				// turn everything off
+				if handler != nil {
+					device.DeactivateAirHandler(handler)
+					device.DeactivateBlower(handler)
+				}
+				if loop != nil {
+					device.DeactivateRadiantLoop(loop)
+				}
+				continue
+			}
 
+			// no errors, so use our switchMap to turn things off and on
 			if handler != nil {
 				if switchMap["activate_blower"] {
 					device.ActivateBlower(handler)
@@ -143,18 +177,19 @@ func RunZoneController(zone *model.Zone) {
 
 func evaluateZoneActions(
 	zoneID string,
-	handlerNil bool,
 	blowerActive bool,
 	pumpActive bool,
-	loopNil bool,
 	loopActive bool,
+	handler *model.AirHandler,
+	loop *model.RadiantFloorLoop,
 	canToggleHandler bool,
 	canToggleLoop bool,
 	temp float64,
 	mode model.SystemMode,
+	sysMode model.SystemMode,
 	threshold float64,
 	secondaryThreshold float64,
-) map[string]bool {
+) (map[string]bool, error) {
 	switchThings := map[string]bool{
 		"activate_blower":   false,
 		"activate_pump":     false,
@@ -164,34 +199,43 @@ func evaluateZoneActions(
 		"deactivate_loop":   false,
 	}
 
-	shouldPrimary := shouldBeOn(temp, threshold, mode)
-	shouldSecondary := shouldBeOn(temp, secondaryThreshold, mode)
+	// Early out if zone is off
+	if mode == model.ModeOff {
+		return switchThings, nil
+	}
+
+	// return an error and early out if the system and zone modes conflict
+	if isOppositeMode(mode, sysMode) {
+		return switchThings, fmt.Errorf("zone mode is opposite of system mode. zone: %s, zone mode: %s, system mode: %s", zoneID, mode, sysMode)
+	}
+
+	if handler == nil && loop == nil {
+		return switchThings, fmt.Errorf("no distribution device associated with zone: %s", zoneID)
+	}
 
 	// Early out if we can't change the state
 	skipHandler := true
 	skipLoop := true
-
-	if !handlerNil && canToggleHandler {
+	if handler != nil && canToggleHandler {
 		skipHandler = false
 	}
-	if !loopNil && canToggleLoop {
+	if loop != nil && canToggleLoop {
 		skipLoop = false
 	}
-
 	if skipHandler && skipLoop {
-		return switchThings
+		return switchThings, nil
 	}
 
 	// Make sure the blower is on if the zone is set to circulate
 	if mode == model.ModeCirculate {
 
 		// API should validate zone mode requests to block this
-		if handlerNil {
+		if handler == nil {
 			log.Error().
 				Str("zone", zoneID).
 				Msg("Zone set to circulate with no air handler")
 
-			return switchThings
+			return switchThings, nil
 		}
 
 		if blowerActive {
@@ -201,11 +245,14 @@ func evaluateZoneActions(
 			}
 		}
 		switchThings["activate_blower"] = true
-		return switchThings
+		return switchThings, nil
 	}
 
+	shouldPrimary := shouldBeOn(temp, threshold, mode)
+	shouldSecondary := shouldBeOn(temp, secondaryThreshold, mode)
+
 	// Loop only
-	if handlerNil && !loopNil {
+	if handler == nil && loop != nil {
 		if mode == model.ModeHeating {
 			if shouldPrimary && !loopActive {
 				switchThings["activate_loop"] = true
@@ -214,11 +261,11 @@ func evaluateZoneActions(
 				switchThings["deactivate_loop"] = true
 			}
 		}
-		return switchThings
+		return switchThings, nil
 	}
 
 	// Handler only
-	if loopNil && !handlerNil {
+	if loop == nil && handler != nil {
 		if shouldPrimary && !pumpActive {
 			switchThings["activate_blower"] = true
 			switchThings["activate_pump"] = true
@@ -227,11 +274,11 @@ func evaluateZoneActions(
 			switchThings["deactivate_blower"] = true
 			switchThings["deactivate_pump"] = true
 		}
-		return switchThings
+		return switchThings, nil
 	}
 
 	// Both handler and loop
-	if !handlerNil && !loopNil {
+	if handler != nil && loop != nil {
 		if mode == model.ModeCooling {
 			if shouldPrimary && !pumpActive {
 				switchThings["activate_blower"] = true
@@ -241,7 +288,7 @@ func evaluateZoneActions(
 				switchThings["deactivate_blower"] = true
 				switchThings["deactivate_pump"] = true
 			}
-			return switchThings
+			return switchThings, nil
 		}
 
 		// Heating mode logic
@@ -262,7 +309,7 @@ func evaluateZoneActions(
 		}
 	}
 
-	return switchThings
+	return switchThings, nil
 }
 
 func getThreshold(zone *model.Zone, active bool, secondary bool) float64 {
@@ -306,24 +353,6 @@ func getThreshold(zone *model.Zone, active bool, secondary bool) float64 {
 func isOppositeMode(a, b model.SystemMode) bool {
 	return (a == model.ModeHeating && b == model.ModeCooling) ||
 		(a == model.ModeCooling && b == model.ModeHeating)
-}
-
-func getAirHandler(zoneID string) *model.AirHandler {
-	for i, ah := range env.SystemState.AirHandlers {
-		if ah.Zone != nil && ah.Zone.ID == zoneID {
-			return &env.SystemState.AirHandlers[i]
-		}
-	}
-	return nil
-}
-
-func getRadiantLoop(zoneID string) *model.RadiantFloorLoop {
-	for i, rl := range env.SystemState.RadiantLoops {
-		if rl.Zone != nil && rl.Zone.ID == zoneID {
-			return &env.SystemState.RadiantLoops[i]
-		}
-	}
-	return nil
 }
 
 func shouldBeOn(zt float64, threshold float64, mode model.SystemMode) bool {
