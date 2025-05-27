@@ -82,7 +82,7 @@ func RunZoneController(zone *model.Zone) {
 
 			// Get temps
 			sensorPath := filepath.Join("/sys/bus/w1/devices", zone.Sensor.Bus)
-			zoneTemp := gpio.ReadSensorTemp(sensorPath)
+			zoneTemp := gpio.ReadSensorTempWithRetries(sensorPath, 5)
 			threshold := getThreshold(zone, pumpActive, false)
 			secondaryThreshold := getThreshold(zone, pumpActive, true)
 

@@ -60,7 +60,7 @@ func RunBufferController(dbConn *sql.DB) {
 
 			// get buffer tank temp
 			sensorPath := filepath.Join("/sys/bus/w1/devices", sensor.Bus)
-			bufferTemp := gpio.ReadSensorTemp(sensorPath)
+			bufferTemp := gpio.ReadSensorTempWithRetries(sensorPath, 5)
 
 			datadog.Gauge("buffer_tank.temperature", bufferTemp, "component:sensor")
 

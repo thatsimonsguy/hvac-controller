@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/rs/zerolog/log"
 	"github.com/thatsimonsguy/hvac-controller/internal/pinctrl"
 
 	"github.com/thatsimonsguy/hvac-controller/internal/env"
@@ -135,29 +137,45 @@ var CurrentlyActive = func(pin model.GPIOPin) bool {
 	return pin.ActiveHigh == level
 }
 
-var ReadSensorTemp = func(sensorPath string) float64 {
+func ReadSensorTempWithRetries(sensorPath string, retries int) float64 {
+	temp, err := ReadSensorTemp(sensorPath)
+	if retries < 0 {
+		shutdown.ShutdownWithError(err, "max sensor retries reached")
+	}
+	if err != nil && retries > 0 {
+		time.Sleep(2 * time.Second)
+		return ReadSensorTempWithRetries(sensorPath, retries-1)
+	}
+	return temp
+}
+
+var ReadSensorTemp = func(sensorPath string) (float64, error) {
 	file := filepath.Join(sensorPath, "w1_slave")
 	data, err := os.ReadFile(file)
 	if err != nil {
-		shutdown.ShutdownWithError(fmt.Errorf("failed to read sensor data: %w", err), "fatal sensor read failure")
+		log.Error().Err(err).Msg("failed to read sensor data")
+		return 0.0, err
 	}
 
 	lines := strings.Split(string(data), "\n")
 	if len(lines) < 2 || !strings.Contains(lines[1], "t=") {
-		shutdown.ShutdownWithError(fmt.Errorf("temperature data missing or malformed"), "fatal sensor read failure")
+		log.Error().Err(err).Msg("temperature data missing or malformed")
+		return 0.0, err
 	}
 
 	parts := strings.Split(lines[1], "t=")
 	if len(parts) != 2 {
-		shutdown.ShutdownWithError(fmt.Errorf("could not parse temperature line: %s", lines[1]), "fatal sensor read failure")
+		log.Error().Err(err).Msg("could not parse temperature line")
+		return 0.0, err
 	}
 
 	tempMilliC, err := strconv.Atoi(parts[1])
 	if err != nil {
-		shutdown.ShutdownWithError(fmt.Errorf("failed to convert temperature to int: %w", err), "fatal sensor read failure")
+		log.Error().Err(err).Msg("failed to convert temperature to int")
+		return 0.0, err
 	}
 
 	// Celsius to Fahrenheit: F = C × 9/5 + 32
 	tempC := float64(tempMilliC) / 1000.0
-	return tempC*9.0/5.0 + 32.0
+	return tempC*9.0/5.0 + 32.0, nil
 }
