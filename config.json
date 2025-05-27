@@ -51,7 +51,7 @@
       ],
       "sensor": {
         "id": "basement_sensor",
-        "bus": "28-yyyyyyyy"
+        "bus": "28-00000051c066"
       }
     },
     {
