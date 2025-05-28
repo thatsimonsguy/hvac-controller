@@ -294,3 +294,17 @@ func GetRadiantLoopByID(db *sql.DB, id string) (*model.RadiantFloorLoop, error) 
 	}
 	return &radiantLoops[0], nil
 }
+
+// GetMainPowerPin retrieves the main power pin configuration as a GPIOPin.
+func GetMainPowerPin(db *sql.DB) (model.GPIOPin, error) {
+	var pinNumber int
+	var activeHigh bool
+	err := db.QueryRow(`SELECT main_power_pin_number, main_power_pin_active_high FROM system WHERE id = 1`).Scan(&pinNumber, &activeHigh)
+	if err != nil {
+		return model.GPIOPin{}, fmt.Errorf("failed to get MainPowerPin: %w", err)
+	}
+	return model.GPIOPin{
+		Number:     pinNumber,
+		ActiveHigh: activeHigh,
+	}, nil
+}

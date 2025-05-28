@@ -16,7 +16,6 @@ import (
 	"github.com/thatsimonsguy/hvac-controller/internal/env"
 	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/logging"
-	"github.com/thatsimonsguy/hvac-controller/internal/state"
 	"github.com/thatsimonsguy/hvac-controller/system/shutdown"
 	"github.com/thatsimonsguy/hvac-controller/system/startup"
 )
@@ -31,7 +30,8 @@ func main() {
 
 	// Initialize the DB
 	db.InitConfig(env.Cfg)
-	if err := db.InitializeIfMissing(); err != nil {
+	firstRun, err := db.InitializeIfMissing()
+	if err != nil {
 		shutdown.ShutdownWithError(err, "Failed to initialize database")
 	}
 	if err := db.ValidateDatabase(); err != nil {
@@ -45,45 +45,32 @@ func main() {
 	}
 	defer dbConn.Close()
 
-	log.Info().
-		Str("state_file", env.Cfg.StateFilePath).
-		Msg("Starting HVAC controller")
+	log.Info().Msg("Starting HVAC controller")
 
-	gpio.SetSafeMode(env.Cfg.SafeMode)
-	if env.Cfg.SafeMode {
-		log.Warn().Msg("SAFE MODE ENABLED — GPIO Set() is disabled system-wide")
-	}
-
-	state.Init(env.Cfg)
-	var loadErr error
-	env.SystemState, loadErr = state.LoadSystemState(env.Cfg.StateFilePath)
-	if loadErr != nil {
-		log.Warn().Err(loadErr).Msg("Failed to load existing system state, starting with defaults")
-		// indicates first run
-		env.SystemState = state.NewSystemStateFromConfig() // create state file from config
-		state.SaveSystemState(env.Cfg.StateFilePath, env.SystemState)
-
+	if firstRun {
 		// write a pinctrl shell script to disk that sets initial pin states, run it now, and install it as a service
 		// context: pin states can float or fluctuate during device boot, so we're setting them as early as possible to their off states via systemd service
-		startup.WriteStartupScript()
+		startup.WriteStartupScript(dbConn)
 		startup.RunStartupScript()
 		startup.InstallStartupService()
 	}
 
-	log.Info().
-		Str("mode", string(env.SystemState.SystemMode)).
-		Int("zones", len(env.SystemState.Zones)).
-		Msg("Loaded system state")
-
-	if err := gpio.ValidateInitialPinStates(); err != nil {
+	if err := gpio.ValidateInitialPinStates(dbConn); err != nil {
 		shutdown.ShutdownWithError(err, "Refusing to enable relay board due to unsafe pin states")
 	}
 
-	if !env.Cfg.SafeMode {
-		gpio.Activate(env.SystemState.MainPowerPin)
+	mainPowerPin, err := db.GetMainPowerPin(dbConn)
+	if err != nil {
+		shutdown.ShutdownWithError(err, "could not retrieve main power pin from db")
+	}
+	gpio.Activate(mainPowerPin) // Turn on the relay board
+
+	zones, err := db.GetAllZones(dbConn)
+	if err != nil {
+		shutdown.ShutdownWithError(err, "could not get zones from db")
 	}
 
-	for _, zone := range env.SystemState.Zones {
+	for _, zone := range zones {
 		zonecontroller.RunZoneController(&zone, dbConn)
 	}
 	buffercontroller.RunBufferController(dbConn)

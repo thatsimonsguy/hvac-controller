@@ -1,6 +1,7 @@
 package gpio
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,16 +10,16 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"github.com/thatsimonsguy/hvac-controller/db"
 	"github.com/thatsimonsguy/hvac-controller/internal/pinctrl"
 
-	"github.com/thatsimonsguy/hvac-controller/internal/env"
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
 	"github.com/thatsimonsguy/hvac-controller/system/shutdown"
 )
 
 var safeMode bool
 
-func ValidateInitialPinStates() error {
+func ValidateInitialPinStates(dbConn *sql.DB) error {
 	type pinWithMeta struct {
 		Name       string
 		Pin        model.GPIOPin
@@ -27,15 +28,24 @@ func ValidateInitialPinStates() error {
 
 	var checks []pinWithMeta
 
-	for _, hp := range env.SystemState.HeatPumps {
+	heatPumps, err := db.GetHeatPumps(dbConn)
+	if err != nil {
+		return err
+	}
+	systemMode, err := db.GetSystemMode(dbConn)
+	if err != nil {
+		return err
+	}
+
+	for _, hp := range heatPumps {
 		checks = append(checks, pinWithMeta{
 			Name:       hp.Name,
 			Pin:        hp.Pin,
 			ShouldBeOn: false,
 		})
 
-		modeActive := contains(hp.Device.ActiveModes, string(env.SystemState.SystemMode)) &&
-			env.SystemState.SystemMode == model.ModeCooling && hp.Device.Online
+		modeActive := contains(hp.Device.ActiveModes, string(systemMode)) &&
+			systemMode == model.ModeCooling && hp.Device.Online
 
 		checks = append(checks, pinWithMeta{
 			Name:       hp.Name + ".mode_pin",
@@ -44,20 +54,36 @@ func ValidateInitialPinStates() error {
 		})
 	}
 
-	for _, ah := range env.SystemState.AirHandlers {
+	airHandlers, err := db.GetAirHandlers(dbConn)
+	if err != nil {
+		return err
+	}
+	for _, ah := range airHandlers {
 		checks = append(checks,
 			pinWithMeta{ah.Name, ah.Pin, false},
 			pinWithMeta{ah.Name + ".circ_pump", ah.CircPumpPin, false},
 		)
 	}
-	for _, b := range env.SystemState.Boilers {
+	boilers, err := db.GetBoilers(dbConn)
+	if err != nil {
+		return err
+	}
+	for _, b := range boilers {
 		checks = append(checks, pinWithMeta{b.Name, b.Pin, false})
 	}
-	for _, rf := range env.SystemState.RadiantLoops {
+	radiantLoops, err := db.GetRadiantLoops(dbConn)
+	if err != nil {
+		return err
+	}
+	for _, rf := range radiantLoops {
 		checks = append(checks, pinWithMeta{rf.Name, rf.Pin, false})
 	}
 
-	checks = append(checks, pinWithMeta{"main_power", env.SystemState.MainPowerPin, false})
+	mainPower, err := db.GetMainPowerPin(dbConn)
+	if err != nil {
+		return err
+	}
+	checks = append(checks, pinWithMeta{"main_power", mainPower, false})
 
 	for _, check := range checks {
 		level, err := pinctrl.ReadLevel(check.Pin.Number)

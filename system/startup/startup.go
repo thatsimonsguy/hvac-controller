@@ -1,16 +1,18 @@
 package startup
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
+	"github.com/thatsimonsguy/hvac-controller/db"
 	"github.com/thatsimonsguy/hvac-controller/internal/env"
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
 )
 
-func WriteStartupScript() error {
+func WriteStartupScript(dbConn *sql.DB) error {
 	var lines []string
 	lines = append(lines, "#!/bin/bash", "", "# HVAC GPIO pin configuration at boot", "")
 
@@ -24,26 +26,48 @@ func WriteStartupScript() error {
 		lines = append(lines, "")
 	}
 
-	for _, hp := range env.SystemState.HeatPumps {
+	heatPumps, err := db.GetHeatPumps(dbConn)
+	if err != nil {
+		return err
+	}
+	systemMode, err := db.GetSystemMode(dbConn)
+	if err != nil {
+		return err
+	}
+	for _, hp := range heatPumps {
 		write(hp.Name, hp.Pin, false)
 
-		modeActive := contains(hp.Device.ActiveModes, string(env.SystemState.SystemMode)) &&
-			env.SystemState.SystemMode == model.ModeCooling && hp.Device.Online
+		modeActive := contains(hp.Device.ActiveModes, string(systemMode)) &&
+			systemMode == model.ModeCooling && hp.Device.Online
 		write(hp.Name+".mode_pin", hp.ModePin, modeActive)
 	}
-
-	for _, ah := range env.SystemState.AirHandlers {
+	airHandlers, err := db.GetAirHandlers(dbConn)
+	if err != nil {
+		return err
+	}
+	for _, ah := range airHandlers {
 		write(ah.Name, ah.Pin, false)
 		write(ah.Name+".circ_pump", ah.CircPumpPin, false)
 	}
-	for _, b := range env.SystemState.Boilers {
+	boilers, err := db.GetBoilers(dbConn)
+	if err != nil {
+		return err
+	}
+	for _, b := range boilers {
 		write(b.Name, b.Pin, false)
 	}
-	for _, rf := range env.SystemState.RadiantLoops {
+	radiantLoops, err := db.GetRadiantLoops(dbConn)
+	if err != nil {
+		return err
+	}
+	for _, rf := range radiantLoops {
 		write(rf.Name, rf.Pin, false)
 	}
-
-	write("main_power", env.SystemState.MainPowerPin, false)
+	mainPower, err := db.GetMainPowerPin(dbConn)
+	if err != nil {
+		return err
+	}
+	write("main_power", mainPower, false)
 
 	contents := strings.Join(lines, "\n") + "\n"
 	return os.WriteFile(env.Cfg.BootScriptFilePath, []byte(contents), 0755)

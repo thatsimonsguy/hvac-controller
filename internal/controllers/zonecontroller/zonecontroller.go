@@ -31,7 +31,7 @@ func RunZoneController(zone *model.Zone, dbConn *sql.DB) {
 
 		// Sleep for 3 mins at first run, relatively safe assumed minOff
 		jitter := time.Duration(rand.Intn(10000)) * time.Millisecond // stagger cycle activation for all async routines
-		time.Sleep(3 * time.Minute + jitter)
+		time.Sleep(3*time.Minute + jitter)
 
 		for {
 			time.Sleep(time.Duration(env.Cfg.PollIntervalSeconds) * time.Second)
@@ -120,21 +120,21 @@ func RunZoneController(zone *model.Zone, dbConn *sql.DB) {
 			)
 			if err != nil {
 				log.Error().Err(err).Str("zone", zone.ID).Msg("zone evaluation failure")
-				
+
 				log.Debug().Err(err).Str("zone", zone.ID).
-				Bool("blower_active", blowerActive).
-				Bool("pump_active", pumpActive).
-				Bool("loop_active", loopActive).
-				Bool("handler_is_nil", handler == nil).
-				Bool("loop_is_nil", loop == nil).
-				Bool("can_toggle_handler", canToggleHandler).
-				Bool("can_toggle_loop", canToggleLoop).
-				Float64("zone_temp", zoneTemp).
-				Str("zone_mode", string(zone.Mode)).
-				Str("system_mode", string(sysMode)).
-				Float64("thresdhold", threshold).
-				Float64("secondary_threshold", secondaryThreshold).Msg("debug: zone evaluation failure")
-				
+					Bool("blower_active", blowerActive).
+					Bool("pump_active", pumpActive).
+					Bool("loop_active", loopActive).
+					Bool("handler_is_nil", handler == nil).
+					Bool("loop_is_nil", loop == nil).
+					Bool("can_toggle_handler", canToggleHandler).
+					Bool("can_toggle_loop", canToggleLoop).
+					Float64("zone_temp", zoneTemp).
+					Str("zone_mode", string(zone.Mode)).
+					Str("system_mode", string(sysMode)).
+					Float64("thresdhold", threshold).
+					Float64("secondary_threshold", secondaryThreshold).Msg("debug: zone evaluation failure")
+
 				// turn everything off
 				if handler != nil {
 					device.DeactivateAirHandler(handler)

@@ -21,24 +21,27 @@ func InitConfig(c *config.Config) {
 	cfg = c
 }
 
-func InitializeIfMissing() error {
+func InitializeIfMissing() (bool, error) {
+	firstRun := false
+
 	if _, err := os.Stat(cfg.DBPath); os.IsNotExist(err) {
+		firstRun = true
 		// Touch the file and set permissions
 		f, err := os.Create(cfg.DBPath)
 		if err != nil {
-			return fmt.Errorf("failed to create database file: %w", err)
+			return firstRun, fmt.Errorf("failed to create database file: %w", err)
 		}
 		f.Close()
 		os.Chmod(cfg.DBPath, 0660) // Optional: Set desired permissions
 
 		// Apply the schema
 		if err := ApplySchema(); err != nil {
-			return err
+			return firstRun, err
 		}
 		// Seed the database
-		return SeedDatabase()
+		return firstRun, SeedDatabase()
 	}
-	return nil // DB file exists, no action needed
+	return firstRun, nil // DB file exists, no action needed
 }
 
 func ApplySchema() error {
