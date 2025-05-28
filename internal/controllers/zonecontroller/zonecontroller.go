@@ -24,9 +24,9 @@ func RunZoneController(zone *model.Zone, dbConn *sql.DB) {
 	go func() {
 		log.Info().Str("zone", zone.ID).Msg("Starting zone controller")
 
-		sensor, err := db.GetSensorByID(dbConn, zone.ID)
+		sensor, err := db.GetSensorByID(dbConn, zone.Sensor.ID)
 		if err != nil {
-			log.Error().Err(err).Str("sensor id", zone.ID).Msg("Could not retrieve sensor")
+			log.Error().Err(err).Str("sensor id", zone.Sensor.ID).Msg("Could not retrieve sensor")
 		}
 
 		// Sleep for 3 mins at first run, relatively safe assumed minOff
