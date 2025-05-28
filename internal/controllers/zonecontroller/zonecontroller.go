@@ -47,6 +47,10 @@ func RunZoneController(zone *model.Zone, dbConn *sql.DB) {
 			sensorPath := filepath.Join("/sys/bus/w1/devices", sensor.Bus)
 			zoneTemp := gpio.ReadSensorTempWithRetries(sensorPath, 5)
 
+			// Log out temp TODO: move this into o11y routine
+			log.Info().Str("zone", zone.ID).Float64("temp", zoneTemp).Msg("Evaluating zone")
+			datadog.Gauge("zone.temperature", zoneTemp, "component:sensor", fmt.Sprintf("zone:%s", zone.ID))
+
 			// Get system mode
 			sysMode, err := db.GetSystemMode(dbConn)
 			if err != nil {
