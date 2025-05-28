@@ -126,10 +126,6 @@ func EvaluateAndToggle(
 	activate func(),
 	deactivate func(),
 ) {
-	if mode == model.ModeCirculate || mode == model.ModeOff {
-		return // early out for modes that don't use the buffer tank
-	}
-
 	shouldToggle := EvaluateToggleSource(role, bufferTemp, active, &source, mode)
 
 	if shouldToggle && active {
@@ -239,6 +235,8 @@ func GetThreshold(role string, mode model.SystemMode, active bool) float64 {
 		case "tertiary":
 			shutdown.ShutdownWithError(fmt.Errorf("invalid tertiary in cooling mode"), "heat source list composition failure")
 		}
+	default: // return value does not matter for off or circulate
+		return 0.0
 	}
 
 	// Should never be reached

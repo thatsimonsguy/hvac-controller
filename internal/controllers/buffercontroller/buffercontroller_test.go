@@ -579,6 +579,8 @@ func TestShouldBeOn(t *testing.T) {
 		{"Cooling: below threshold", 65.0, 70.0, model.ModeCooling, false},
 		{"Cooling: at threshold", 70.0, 70.0, model.ModeCooling, false},
 		{"Cooling: above threshold", 75.0, 70.0, model.ModeCooling, true},
+		{"Mode: Off", 75.0, 70.0, model.ModeOff, false},
+		{"Mode: Circulate", 75.0, 70.0, model.ModeCirculate, false},
 		{"Invalid mode", 70.0, 70.0, "invalid_mode", false},
 	}
 
@@ -621,6 +623,18 @@ func TestGetThreshold(t *testing.T) {
 
 		{"secondary cooling inactive", "secondary", model.ModeCooling, false, 72.0},
 		{"secondary cooling active", "secondary", model.ModeCooling, true, 72.0 - env.Cfg.Spread},
+
+		{"primary active mode off", "primary", model.ModeOff, true, 0.0},
+		{"secondary active mode off", "secondary", model.ModeOff, true, 0.0},
+
+		{"primary active mode circulate", "primary", model.ModeCirculate, true, 0.0},
+		{"secondary active mode circulate", "secondary", model.ModeCirculate, true, 0.0},
+
+		{"primary inactive mode off", "primary", model.ModeOff, false, 0.0},
+		{"secondary inactive mode off", "secondary", model.ModeOff, false, 0.0},
+
+		{"primary inactive mode circulate", "primary", model.ModeCirculate, false, 0.0},
+		{"secondary inactive mode circulate", "secondary", model.ModeCirculate, false, 0.0},
 	}
 
 	for _, tt := range tests {
@@ -647,7 +661,6 @@ func TestGetThreshold_ShutdownCases(t *testing.T) {
 	}{
 		{"invalid role", "invalid", model.ModeHeating, true},
 		{"tertiary in cooling mode", "tertiary", model.ModeCooling, true},
-		{"unknown mode", "primary", "", false},
 	}
 
 	for _, tt := range tests {
@@ -696,6 +709,14 @@ func TestEvaluateToggleSource(t *testing.T) {
 		{"Cooling: should be on, currently off, can toggle", "primary", model.ModeCooling, 80, false, true, true},
 		{"Cooling: should be off, currently on, can toggle", "primary", model.ModeCooling, 60, true, true, true},
 		{"Cooling: correct state, no toggle needed", "primary", model.ModeCooling, 60, false, true, false},
+
+		// OFF CASES
+		{"Off: should be off, currently on, can toggle", "primary", model.ModeOff, 0.0, true, true, true},
+		{"Off: should be off, currently on, CANNOT toggle", "primary", model.ModeOff, 0.0, true, false, false},
+
+		// CIRCULATE CASES
+		{"Off: should be off (circulate), currently on, can toggle", "primary", model.ModeCirculate, 0.0, true, true, true},
+		{"Off: should be off (circulate), currently on, CANNOT toggle", "primary", model.ModeCirculate, 0.0, true, false, false},
 	}
 
 	for _, tt := range tests {
@@ -753,7 +774,7 @@ func TestEvaluateAndToggle(t *testing.T) {
 		assert.False(t, deactivated)
 	})
 
-	t.Run("mode is off, no toggle should occur", func(t *testing.T) {
+	t.Run("mode is off, source is off, no toggle should occur", func(t *testing.T) {
 		activated, deactivated = false, false
 
 		buffercontroller.EvaluateAndToggle("primary", model.Device{Name: "offcase"}, false, 45, model.ModeOff, mockActivate, mockDeactivate)
@@ -761,12 +782,11 @@ func TestEvaluateAndToggle(t *testing.T) {
 		assert.False(t, deactivated)
 	})
 
-	t.Run("mode is circulate, no toggle should occur", func(t *testing.T) {
+	t.Run("mode is circulate, source is off, no toggle should occur", func(t *testing.T) {
 		activated, deactivated = false, false
 
-		buffercontroller.EvaluateAndToggle("primary", model.Device{Name: "circ"}, true, 45, model.ModeCirculate, mockActivate, mockDeactivate)
+		buffercontroller.EvaluateAndToggle("primary", model.Device{Name: "circ"}, false, 45, model.ModeCirculate, mockActivate, mockDeactivate)
 		assert.False(t, activated)
 		assert.False(t, deactivated)
 	})
-
 }
