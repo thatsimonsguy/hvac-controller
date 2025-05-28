@@ -37,7 +37,7 @@
       ],
       "sensor": {
         "id": "main_floor_sensor",
-        "bus": "28-xxxxxxxx"
+        "bus": "28-000000523cb7"
       }
     },
     {
@@ -63,7 +63,7 @@
       ],
       "sensor": {
         "id": "garage_sensor",
-        "bus": "28-zzzzzzzz"
+        "bus": "28-0000005084fd"
       }
     }
   ],
