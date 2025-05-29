@@ -216,7 +216,7 @@ func GetRadiantLoops(db *sql.DB) ([]model.RadiantFloorLoop, error) {
 
 // GetAirHandlerByID retrieves a single air handler by device name (ID).
 func GetAirHandlerByID(db *sql.DB, id string) (*model.AirHandler, error) {
-	rows, err := db.Query(`SELECT name, pin_number, pin_active_high, min_on, min_off, online, last_changed, active_modes, zone_id, circ_pump_pin_number, circ_pump_pin_active_high FROM devices WHERE device_type = 'air_handler' AND name = ?`, id)
+	rows, err := db.Query(`SELECT name, pin_number, pin_active_high, min_on, min_off, online, last_changed, active_modes, zone_id, circ_pump_pin_number, circ_pump_pin_active_high FROM devices WHERE device_type = 'air_handler' AND zone_id = ?`, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query air handler %s: %w", id, err)
 	}
@@ -258,7 +258,7 @@ func GetAirHandlerByID(db *sql.DB, id string) (*model.AirHandler, error) {
 
 // GetRadiantLoopByID retrieves a single radiant floor loop by device name (ID).
 func GetRadiantLoopByID(db *sql.DB, id string) (*model.RadiantFloorLoop, error) {
-	rows, err := db.Query(`SELECT name, pin_number, pin_active_high, min_on, min_off, online, last_changed, active_modes, zone_id FROM devices WHERE device_type = 'radiant_floor' AND name = ?`, id)
+	rows, err := db.Query(`SELECT name, pin_number, pin_active_high, min_on, min_off, online, last_changed, active_modes, zone_id FROM devices WHERE device_type = 'radiant_floor' AND zone_id = ?`, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query radiant loop %s: %w", id, err)
 	}

@@ -48,7 +48,7 @@ func RunZoneController(zone *model.Zone, dbConn *sql.DB) {
 			zoneTemp := gpio.ReadSensorTempWithRetries(sensorPath, 5)
 
 			// Log out temp TODO: move this into o11y routine
-			log.Info().Str("zone", zone.ID).Float64("temp", zoneTemp).Msg("Evaluating zone")
+			log.Info().Str("zone", zone.ID).Str("mode", string(zone.Mode)).Float64("temp", zoneTemp).Msg("Evaluating zone")
 			datadog.Gauge("zone.temperature", zoneTemp, "component:sensor", fmt.Sprintf("zone:%s", zone.ID))
 
 			// Get system mode
@@ -203,8 +203,17 @@ func evaluateZoneActions(
 		"deactivate_loop":   false,
 	}
 
-	// Early out if zone is off
+	// turn everythuing off if zone is off
 	if mode == model.ModeOff {
+		if blowerActive && canToggleHandler {
+			switchThings["deactivate_blower"] = true
+		}
+		if pumpActive && canToggleHandler {
+			switchThings["deactivate_pump"] = true
+		}
+		if loopActive && canToggleLoop {
+			switchThings["deactivate_loop"] = true
+		}
 		return switchThings, nil
 	}
 
