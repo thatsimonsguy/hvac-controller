@@ -70,6 +70,10 @@ func RunBufferController(dbConn *sql.DB) {
 				log.Error().Err(err).Msg("Could nor retrieve system mode from db")
 			}
 
+			if err := SetSystemMode(dbConn, mode); err != nil {
+				log.Error().Err(err).Msg("failed to set system mode pins correctly")
+			}
+
 			log.Info().
 				Str("mode", string(mode)).
 				Float64("buffer_temp", bufferTemp).
