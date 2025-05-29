@@ -18,6 +18,7 @@ func SetSystemMode(dbConn *sql.DB, mode model.SystemMode) error {
 		return err
 	}
 
+	swapped := false
 	for i := range hps {
 		hp := hps[i]
 
@@ -34,20 +35,24 @@ func SetSystemMode(dbConn *sql.DB, mode model.SystemMode) error {
 			func() { device.DeactivateHeatPump(&hp) },
 			time.Sleep)
 
-		if !should && modeActive {
+		if should && modeActive {
 			gpio.Deactivate(hp.ModePin) // sys mode in heating, off, or circ and mode pin is on (cooling)
 			log.Info().Str("heat pump", hp.Name).Msg("switching mode pin FROM cooling TO heating")
+			swapped = true
 		}
 		if should && !modeActive {
 			gpio.Activate(hp.ModePin) // sys mode is in cooling and mode pin is off
 			log.Info().Str("heat pump", hp.Name).Msg("switching mode pin FROM heating TO cooling")
+			swapped = true
 		}
 	}
 
 	// rewrite the startup script to reflect the current state of the DB so validation will pass on reboot if there's a crash or power failure
-	if err := startup.WriteStartupScript(dbConn); err != nil {
-		log.Error().Err(err).Msg("failed to rewrite pinsetter script")
-		return err
+	if swapped {
+		if err := startup.WriteStartupScript(dbConn); err != nil {
+			log.Error().Err(err).Msg("failed to rewrite pinsetter script")
+			return err
+		}
 	}
 
 	return nil // mode pins are now aligned with system mode
@@ -61,6 +66,9 @@ func ShouldToggle(pumpActive bool,
 	minOn time.Duration,
 	pumpDeactivate func(),
 	sleepFunc func(time.Duration)) bool {
+
+	log.Debug().Bool("pump_active", pumpActive).Bool("hp_mode_cooling", modeActive).Str("system_mode", string(sysMode)).
+		Bool("can_toggle", canToggle).Bool("hp_online", online).Float64("min_on", minOn.Minutes())
 
 	// evaluate whether the mode needs to change
 	fromCooling := modeActive && sysMode != model.ModeCooling
