@@ -256,6 +256,7 @@ func evaluateZoneActions(
 				// turn off pump if we just switched from heat/cool to circulate
 				switchThings["deactivate_pump"] = true
 			}
+			return switchThings, nil // keep blower active, no switching
 		}
 		switchThings["activate_blower"] = true
 		return switchThings, nil

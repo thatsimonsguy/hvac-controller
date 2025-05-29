@@ -124,7 +124,7 @@ func TestEvaluateZoneActions(t *testing.T) {
 			threshold:          0,
 			secondaryThreshold: 0,
 			want: map[string]bool{
-				"activate_blower":   true,
+				"activate_blower":   false,
 				"deactivate_pump":   true,
 				"activate_pump":     false,
 				"deactivate_blower": false,
