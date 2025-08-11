@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/rs/zerolog/log"
 
@@ -121,6 +122,59 @@ func contains(list []string, val string) bool {
 	return false
 }
 
+// isPermissionError checks if an error is related to permissions
+func isPermissionError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check for common permission error patterns
+	errStr := strings.ToLower(err.Error())
+	permissionKeywords := []string{
+		"permission denied",
+		"operation not permitted",
+		"access denied",
+		"insufficient privileges",
+	}
+
+	for _, keyword := range permissionKeywords {
+		if strings.Contains(errStr, keyword) {
+			return true
+		}
+	}
+
+	// Check for specific syscall permission errors
+	if pathErr, ok := err.(*os.PathError); ok {
+		if errno, ok := pathErr.Err.(syscall.Errno); ok {
+			return errno == syscall.EACCES || errno == syscall.EPERM
+		}
+	}
+
+	return false
+}
+
+// printSudoGuidance prints helpful guidance for running with sudo
+func printSudoGuidance() {
+	fmt.Println()
+	fmt.Println("═══════════════════════════════════════════════════════════")
+	fmt.Println("  PERMISSION ERROR: Service creation requires elevated privileges")
+	fmt.Println("═══════════════════════════════════════════════════════════")
+	fmt.Println()
+	fmt.Println("To create the required systemd services, please run:")
+	fmt.Println()
+	fmt.Println("  sudo ./hvac-controller")
+	fmt.Println()
+	fmt.Println("This will:")
+	fmt.Println("  • Create the GPIO pin configuration service")
+	fmt.Println("  • Create the HVAC controller service")
+	fmt.Println("  • Enable both services to start on boot")
+	fmt.Println()
+	fmt.Println("After running once with sudo, you can run normally without sudo.")
+	fmt.Println()
+	fmt.Println("═══════════════════════════════════════════════════════════")
+	fmt.Println()
+}
+
 // Add to startup.go:
 func InstallHVACService() error {
 	gpioUnitName := filepath.Base(env.Cfg.OSServicePath)
@@ -128,7 +182,7 @@ func InstallHVACService() error {
 	// Consider adding these to your config, too:
 	user := "oebus"
 	workdir := "/home/oebus/hvac-controller"
-	execCmd := "go run ./cmd/hvac-controller/main.go"
+	execCmd := "/home/oebus/hvac-controller/hvac-controller"
 
 	unit := fmt.Sprintf(`[Unit]
 Description=HVAC Controller main service
@@ -248,19 +302,23 @@ func EnsureServicesReady(dbConn *sql.DB) error {
 	// Handle GPIO service
 	if !status.GPIO.Exists {
 		log.Info().Msg("GPIO service not found, installing...")
-		
+
 		// Write the startup script first
 		if err := WriteStartupScript(dbConn); err != nil {
 			log.Error().Err(err).Msg("Failed to write startup script")
 			return err
 		}
-		
+
 		// Install the GPIO service
 		if err := InstallStartupService(); err != nil {
+			if isPermissionError(err) {
+				printSudoGuidance()
+				return fmt.Errorf("service creation requires elevated privileges")
+			}
 			log.Error().Err(err).Msg("Failed to install GPIO service")
 			return err
 		}
-		
+
 		needsReload = true
 		log.Info().Msg("GPIO service installed successfully")
 	}
@@ -268,12 +326,16 @@ func EnsureServicesReady(dbConn *sql.DB) error {
 	// Handle HVAC service
 	if !status.HVAC.Exists {
 		log.Info().Msg("HVAC service not found, installing...")
-		
+
 		if err := InstallHVACService(); err != nil {
+			if isPermissionError(err) {
+				printSudoGuidance()
+				return fmt.Errorf("service creation requires elevated privileges")
+			}
 			log.Error().Err(err).Msg("Failed to install HVAC service")
 			return err
 		}
-		
+
 		needsReload = true
 		log.Info().Msg("HVAC service installed successfully")
 	}
@@ -282,6 +344,10 @@ func EnsureServicesReady(dbConn *sql.DB) error {
 	if needsReload {
 		log.Info().Msg("Reloading systemd daemon...")
 		if err := exec.Command("systemctl", "daemon-reload").Run(); err != nil {
+			if isPermissionError(err) {
+				printSudoGuidance()
+				return fmt.Errorf("service management requires elevated privileges")
+			}
 			log.Error().Err(err).Msg("Failed to reload systemd daemon")
 			return fmt.Errorf("failed to reload systemd daemon: %w", err)
 		}
@@ -297,12 +363,16 @@ func EnsureServicesReady(dbConn *sql.DB) error {
 	if status.GPIO.Exists && !status.GPIO.Enabled {
 		gpioServiceName := filepath.Base(env.Cfg.OSServicePath)
 		log.Info().Str("service", gpioServiceName).Msg("Enabling GPIO service...")
-		
+
 		if err := exec.Command("systemctl", "enable", gpioServiceName).Run(); err != nil {
+			if isPermissionError(err) {
+				printSudoGuidance()
+				return fmt.Errorf("service management requires elevated privileges")
+			}
 			log.Error().Err(err).Str("service", gpioServiceName).Msg("Failed to enable GPIO service")
 			return fmt.Errorf("failed to enable GPIO service: %w", err)
 		}
-		
+
 		log.Info().Str("service", gpioServiceName).Msg("GPIO service enabled successfully")
 	}
 
@@ -310,12 +380,16 @@ func EnsureServicesReady(dbConn *sql.DB) error {
 	if status.HVAC.Exists && !status.HVAC.Enabled {
 		hvacServiceName := filepath.Base(env.Cfg.MainServicePath)
 		log.Info().Str("service", hvacServiceName).Msg("Enabling HVAC service...")
-		
+
 		if err := exec.Command("systemctl", "enable", hvacServiceName).Run(); err != nil {
+			if isPermissionError(err) {
+				printSudoGuidance()
+				return fmt.Errorf("service management requires elevated privileges")
+			}
 			log.Error().Err(err).Str("service", hvacServiceName).Msg("Failed to enable HVAC service")
 			return fmt.Errorf("failed to enable HVAC service: %w", err)
 		}
-		
+
 		log.Info().Str("service", hvacServiceName).Msg("HVAC service enabled successfully")
 	}
 
