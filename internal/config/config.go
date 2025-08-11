@@ -19,6 +19,7 @@ type Config struct {
 	StateFilePath      string `json:"state_file_path"`
 	BootScriptFilePath string `json:"boot_script_file_path"`
 	OSServicePath      string `json:"os_service_path"`
+	MainServicePath    string `json:"main_service_path"`
 	LogLevel           zerolog.Level
 	SafeMode           bool `json:"safe_mode"`
 

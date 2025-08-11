@@ -53,6 +53,9 @@ func main() {
 		startup.WriteStartupScript(dbConn)
 		startup.RunStartupScript()
 		startup.InstallStartupService()
+
+		// Install main.go as a service so HVAC controller starts automatically on power, after gpio-config
+		startup.InstallHVACService()
 	}
 
 	if err := gpio.ValidateInitialPinStates(dbConn); err != nil {

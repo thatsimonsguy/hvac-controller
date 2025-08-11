@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/thatsimonsguy/hvac-controller/db"
@@ -80,6 +81,7 @@ After=network.target
 
 [Service]
 Type=oneshot
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
 ExecStart=%s
 RemainAfterExit=true
 
@@ -104,4 +106,34 @@ func contains(list []string, val string) bool {
 		}
 	}
 	return false
+}
+
+// Add to startup.go:
+func InstallHVACService() error {
+	gpioUnitName := filepath.Base(env.Cfg.OSServicePath)
+
+	// Consider adding these to your config, too:
+	user := "oebus"
+	workdir := "/home/oebus/hvac-controller"
+	execCmd := "go run ./cmd/hvac-controller/main.go"
+
+	unit := fmt.Sprintf(`[Unit]
+Description=HVAC Controller main service
+After=%s
+Requires=%s
+
+[Service]
+Type=simple
+User=%s
+WorkingDirectory=%s
+Environment=PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/bin/bash -lc '%s'
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+`, gpioUnitName, gpioUnitName, user, workdir, execCmd)
+
+	return os.WriteFile(env.Cfg.MainServicePath, []byte(unit), 0644)
 }
