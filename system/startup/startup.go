@@ -8,10 +8,23 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/thatsimonsguy/hvac-controller/db"
 	"github.com/thatsimonsguy/hvac-controller/internal/env"
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
 )
+
+type ServiceStatus struct {
+	Exists  bool
+	Enabled bool
+	Active  bool
+}
+
+type ServicesStatus struct {
+	GPIO ServiceStatus
+	HVAC ServiceStatus
+}
 
 func WriteStartupScript(dbConn *sql.DB) error {
 	var lines []string
@@ -136,4 +149,181 @@ WantedBy=multi-user.target
 `, gpioUnitName, gpioUnitName, user, workdir, execCmd)
 
 	return os.WriteFile(env.Cfg.MainServicePath, []byte(unit), 0644)
+}
+
+// CheckServicesStatus checks the existence and status of both services
+func CheckServicesStatus() (ServicesStatus, error) {
+	status := ServicesStatus{}
+
+	// Check GPIO service
+	gpioStatus, err := checkSingleService(env.Cfg.OSServicePath)
+	if err != nil {
+		return status, fmt.Errorf("error checking GPIO service: %w", err)
+	}
+	status.GPIO = gpioStatus
+
+	// Check HVAC service
+	hvacStatus, err := checkSingleService(env.Cfg.MainServicePath)
+	if err != nil {
+		return status, fmt.Errorf("error checking HVAC service: %w", err)
+	}
+	status.HVAC = hvacStatus
+
+	return status, nil
+}
+
+// checkSingleService checks if a service file exists and its systemd status
+func checkSingleService(servicePath string) (ServiceStatus, error) {
+	status := ServiceStatus{}
+
+	// Check if service file exists
+	if _, err := os.Stat(servicePath); err == nil {
+		status.Exists = true
+	} else if !os.IsNotExist(err) {
+		return status, err
+	}
+
+	if !status.Exists {
+		return status, nil
+	}
+
+	// Get service name from path
+	serviceName := filepath.Base(servicePath)
+
+	// Check if service is enabled
+	cmd := exec.Command("systemctl", "is-enabled", serviceName)
+	if err := cmd.Run(); err == nil {
+		status.Enabled = true
+	}
+
+	// Check if service is active
+	cmd = exec.Command("systemctl", "is-active", serviceName)
+	if err := cmd.Run(); err == nil {
+		status.Active = true
+	}
+
+	return status, nil
+}
+
+// LogServicesStatus logs the current status of both services using zerolog
+func LogServicesStatus() error {
+	status, err := CheckServicesStatus()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to check services status")
+		return err
+	}
+
+	gpioServiceName := filepath.Base(env.Cfg.OSServicePath)
+	hvacServiceName := filepath.Base(env.Cfg.MainServicePath)
+
+	log.Info().
+		Str("service", gpioServiceName).
+		Bool("exists", status.GPIO.Exists).
+		Bool("enabled", status.GPIO.Enabled).
+		Bool("active", status.GPIO.Active).
+		Msg("GPIO service status")
+
+	log.Info().
+		Str("service", hvacServiceName).
+		Bool("exists", status.HVAC.Exists).
+		Bool("enabled", status.HVAC.Enabled).
+		Bool("active", status.HVAC.Active).
+		Msg("HVAC service status")
+
+	return nil
+}
+
+// EnsureServicesReady checks service status and installs/enables services as needed
+func EnsureServicesReady(dbConn *sql.DB) error {
+	log.Info().Msg("Checking HVAC services status...")
+
+	status, err := CheckServicesStatus()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to check services status")
+		return err
+	}
+
+	var needsReload bool
+
+	// Handle GPIO service
+	if !status.GPIO.Exists {
+		log.Info().Msg("GPIO service not found, installing...")
+		
+		// Write the startup script first
+		if err := WriteStartupScript(dbConn); err != nil {
+			log.Error().Err(err).Msg("Failed to write startup script")
+			return err
+		}
+		
+		// Install the GPIO service
+		if err := InstallStartupService(); err != nil {
+			log.Error().Err(err).Msg("Failed to install GPIO service")
+			return err
+		}
+		
+		needsReload = true
+		log.Info().Msg("GPIO service installed successfully")
+	}
+
+	// Handle HVAC service
+	if !status.HVAC.Exists {
+		log.Info().Msg("HVAC service not found, installing...")
+		
+		if err := InstallHVACService(); err != nil {
+			log.Error().Err(err).Msg("Failed to install HVAC service")
+			return err
+		}
+		
+		needsReload = true
+		log.Info().Msg("HVAC service installed successfully")
+	}
+
+	// Reload systemd if we installed any new services
+	if needsReload {
+		log.Info().Msg("Reloading systemd daemon...")
+		if err := exec.Command("systemctl", "daemon-reload").Run(); err != nil {
+			log.Error().Err(err).Msg("Failed to reload systemd daemon")
+			return fmt.Errorf("failed to reload systemd daemon: %w", err)
+		}
+	}
+
+	// Re-check status after potential installations
+	status, err = CheckServicesStatus()
+	if err != nil {
+		return err
+	}
+
+	// Enable GPIO service if not enabled
+	if status.GPIO.Exists && !status.GPIO.Enabled {
+		gpioServiceName := filepath.Base(env.Cfg.OSServicePath)
+		log.Info().Str("service", gpioServiceName).Msg("Enabling GPIO service...")
+		
+		if err := exec.Command("systemctl", "enable", gpioServiceName).Run(); err != nil {
+			log.Error().Err(err).Str("service", gpioServiceName).Msg("Failed to enable GPIO service")
+			return fmt.Errorf("failed to enable GPIO service: %w", err)
+		}
+		
+		log.Info().Str("service", gpioServiceName).Msg("GPIO service enabled successfully")
+	}
+
+	// Enable HVAC service if not enabled
+	if status.HVAC.Exists && !status.HVAC.Enabled {
+		hvacServiceName := filepath.Base(env.Cfg.MainServicePath)
+		log.Info().Str("service", hvacServiceName).Msg("Enabling HVAC service...")
+		
+		if err := exec.Command("systemctl", "enable", hvacServiceName).Run(); err != nil {
+			log.Error().Err(err).Str("service", hvacServiceName).Msg("Failed to enable HVAC service")
+			return fmt.Errorf("failed to enable HVAC service: %w", err)
+		}
+		
+		log.Info().Str("service", hvacServiceName).Msg("HVAC service enabled successfully")
+	}
+
+	// Log final status
+	if err := LogServicesStatus(); err != nil {
+		log.Warn().Err(err).Msg("Failed to log final services status")
+	}
+
+	log.Info().Msg("Services ready - all required services are installed and enabled")
+	return nil
 }

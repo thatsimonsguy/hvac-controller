@@ -47,15 +47,17 @@ func main() {
 
 	log.Info().Msg("Starting HVAC controller")
 
-	if firstRun {
-		// write a pinctrl shell script to disk that sets initial pin states, run it now, and install it as a service
-		// context: pin states can float or fluctuate during device boot, so we're setting them as early as possible to their off states via systemd service
-		startup.WriteStartupScript(dbConn)
-		startup.RunStartupScript()
-		startup.InstallStartupService()
+	// Ensure services are properly installed and enabled on every run
+	if err := startup.EnsureServicesReady(dbConn); err != nil {
+		shutdown.ShutdownWithError(err, "Failed to ensure services are ready")
+	}
 
-		// Install main.go as a service so HVAC controller starts automatically on power, after gpio-config
-		startup.InstallHVACService()
+	if firstRun {
+		// Run the startup script now to set initial pin states
+		// context: pin states can float or fluctuate during device boot, so we're setting them as early as possible to their off states
+		if err := startup.RunStartupScript(); err != nil {
+			shutdown.ShutdownWithError(err, "Failed to run startup script")
+		}
 	}
 
 	if err := gpio.ValidateInitialPinStates(dbConn); err != nil {
