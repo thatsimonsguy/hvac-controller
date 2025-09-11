@@ -11,6 +11,7 @@ import (
 	"github.com/thatsimonsguy/hvac-controller/db"
 	"github.com/thatsimonsguy/hvac-controller/internal/config"
 	"github.com/thatsimonsguy/hvac-controller/internal/controllers/buffercontroller"
+	"github.com/thatsimonsguy/hvac-controller/internal/controllers/failsafecontroller"
 	"github.com/thatsimonsguy/hvac-controller/internal/controllers/recirculationcontroller"
 	"github.com/thatsimonsguy/hvac-controller/internal/controllers/zonecontroller"
 	"github.com/thatsimonsguy/hvac-controller/internal/datadog"
@@ -81,6 +82,7 @@ func main() {
 	}
 	buffercontroller.RunBufferController(dbConn)
 	recirculationcontroller.RunRecirculationController(dbConn)
+	failsafecontroller.RunFailsafeController(dbConn)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
