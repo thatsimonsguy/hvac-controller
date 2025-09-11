@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"math/rand"
-	"path/filepath"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -20,7 +19,11 @@ import (
 const ZoneSpread float64 = 0.5
 const HeatingSecondaryThreshold float64 = 3
 
-func RunZoneController(zone *model.Zone, dbConn *sql.DB) {
+type TemperatureService interface {
+	GetTemperature(sensorID string) (float64, bool)
+}
+
+func RunZoneController(zone *model.Zone, dbConn *sql.DB, tempService TemperatureService) {
 	go func() {
 		log.Info().Str("zone", zone.ID).Msg("Starting zone controller")
 
@@ -55,8 +58,11 @@ func RunZoneController(zone *model.Zone, dbConn *sql.DB) {
 			}
 
 			// Get temp
-			sensorPath := filepath.Join("/sys/bus/w1/devices", sensor.Bus)
-			zoneTemp := gpio.ReadSensorTempWithRetries(sensorPath, 5)
+			zoneTemp, valid := tempService.GetTemperature(sensor.ID)
+			if !valid {
+				log.Warn().Str("zone", zone.ID).Msg("No valid temperature reading available for zone")
+				continue
+			}
 
 			// Log out temp TODO: move this into o11y routine
 			log.Info().Str("zone", zone.ID).Str("mode", string(zone.Mode)).Float64("temp", zoneTemp).Msg("Evaluating zone")

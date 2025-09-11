@@ -3,7 +3,6 @@ package buffercontroller
 import (
 	"database/sql"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -37,7 +36,11 @@ func (RealProvider) GetHeatSources(dbConn *sql.DB) HeatSources {
 	return GetHeatSources(dbConn)
 }
 
-func RunBufferController(dbConn *sql.DB) {
+type TemperatureService interface {
+	GetTemperature(sensorID string) (float64, bool)
+}
+
+func RunBufferController(dbConn *sql.DB, tempService TemperatureService) {
 	go func() {
 		log.Info().Msg("Starting buffer tank controller")
 
@@ -59,8 +62,11 @@ func RunBufferController(dbConn *sql.DB) {
 			sources := refresher.RefreshSources(dbConn)
 
 			// get buffer tank temp
-			sensorPath := filepath.Join("/sys/bus/w1/devices", sensor.Bus)
-			bufferTemp := gpio.ReadSensorTempWithRetries(sensorPath, 5)
+			bufferTemp, valid := tempService.GetTemperature(sensor.ID)
+			if !valid {
+				log.Warn().Msg("No valid temperature reading available for buffer tank")
+				continue
+			}
 
 			datadog.Gauge("buffer_tank.temperature", bufferTemp, "component:sensor")
 

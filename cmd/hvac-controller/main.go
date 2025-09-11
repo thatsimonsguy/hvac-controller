@@ -17,6 +17,7 @@ import (
 	"github.com/thatsimonsguy/hvac-controller/internal/controllers/zonecontroller"
 	"github.com/thatsimonsguy/hvac-controller/internal/datadog"
 	"github.com/thatsimonsguy/hvac-controller/internal/env"
+	"github.com/thatsimonsguy/hvac-controller/internal/temperature"
 	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/logging"
 	"github.com/thatsimonsguy/hvac-controller/system/shutdown"
@@ -73,24 +74,28 @@ func main() {
 	}
 	gpio.Activate(mainPowerPin) // Turn on the relay board
 
+	// Start centralized temperature reading service
+	tempService := temperature.NewService(dbConn, env.Cfg.PollIntervalSeconds)
+	tempService.Start()
+
 	zones, err := db.GetAllZones(dbConn)
 	if err != nil {
 		shutdown.ShutdownWithError(err, "could not get zones from db")
 	}
 
 	for _, zone := range zones {
-		zonecontroller.RunZoneController(&zone, dbConn)
+		zonecontroller.RunZoneController(&zone, dbConn, tempService)
 	}
 	
 	// Stagger controller startups to avoid CPU spikes and race conditions
 	time.Sleep(3 * time.Second)
-	buffercontroller.RunBufferController(dbConn)
+	buffercontroller.RunBufferController(dbConn, tempService)
 	
 	time.Sleep(3 * time.Second)
 	recirculationcontroller.RunRecirculationController(dbConn)
 	
 	time.Sleep(3 * time.Second)
-	failsafecontroller.RunFailsafeController(dbConn)
+	failsafecontroller.RunFailsafeController(dbConn, tempService)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)

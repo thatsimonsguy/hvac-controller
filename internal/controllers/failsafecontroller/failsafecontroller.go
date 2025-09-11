@@ -2,7 +2,6 @@ package failsafecontroller
 
 import (
 	"database/sql"
-	"path/filepath"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -10,7 +9,6 @@ import (
 	"github.com/thatsimonsguy/hvac-controller/db"
 	"github.com/thatsimonsguy/hvac-controller/internal/device"
 	"github.com/thatsimonsguy/hvac-controller/internal/env"
-	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
 )
 
@@ -44,7 +42,11 @@ type FailsafeAction struct {
 	DeactivateZones []string
 }
 
-func RunFailsafeController(dbConn *sql.DB) {
+type TemperatureService interface {
+	GetTemperature(sensorID string) (float64, bool)
+}
+
+func RunFailsafeController(dbConn *sql.DB, tempService TemperatureService) {
 	go func() {
 		log.Info().Msg("Starting failsafe controller")
 
@@ -69,7 +71,7 @@ func RunFailsafeController(dbConn *sql.DB) {
 			}
 
 			// Read all zone temperatures and device states
-			zoneStates := gatherZoneStates(dbConn, zones)
+			zoneStates := gatherZoneStates(dbConn, zones, tempService)
 
 			// Determine what actions need to be taken
 			action := evaluateFailsafeActions(zoneStates, overrideActive, env.Cfg.SystemOverrideMinTemp, env.Cfg.SystemOverrideMaxTemp, env.Cfg.Spread)
@@ -80,7 +82,7 @@ func RunFailsafeController(dbConn *sql.DB) {
 	}()
 }
 
-func gatherZoneStates(dbConn *sql.DB, zones []model.Zone) []ZoneState {
+func gatherZoneStates(dbConn *sql.DB, zones []model.Zone, tempService TemperatureService) []ZoneState {
 	var zoneStates []ZoneState
 
 	for _, zone := range zones {
@@ -90,8 +92,11 @@ func gatherZoneStates(dbConn *sql.DB, zones []model.Zone) []ZoneState {
 			continue
 		}
 
-		sensorPath := filepath.Join("/sys/bus/w1/devices", sensor.Bus)
-		zoneTemp := gpio.ReadSensorTempWithRetries(sensorPath, 5)
+		zoneTemp, valid := tempService.GetTemperature(sensor.ID)
+		if !valid {
+			log.Warn().Str("zone", zone.ID).Msg("No valid temperature reading available for zone")
+			continue
+		}
 
 		handler, _ := db.GetAirHandlerByID(dbConn, zone.ID)
 		loop, _ := db.GetRadiantLoopByID(dbConn, zone.ID)
@@ -137,8 +142,8 @@ func evaluateFailsafeActions(zoneStates []ZoneState, overrideActive bool, minTem
 			Float64("temp", zoneState.Temperature).
 			Float64("min_threshold", minTemp).
 			Float64("max_threshold", maxTemp).
-			Float64("delta_from_min", deltaFromMin).
-			Float64("delta_from_max", deltaFromMax).
+			Float32("delta_from_min", float32(deltaFromMin)).
+			Float32("delta_from_max", float32(deltaFromMax)).
 			Bool("override_active", overrideActive).
 			Msg("Evaluating zone for failsafe conditions")
 
