@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS system (
     main_power_pin_number INTEGER,
     main_power_pin_active_high BOOLEAN,
     temp_sensor_bus_pin INTEGER,
+    override_active BOOLEAN DEFAULT FALSE,
+    prior_system_mode TEXT DEFAULT NULL,
     UNIQUE (id)  -- Ensure singleton record
 );
 

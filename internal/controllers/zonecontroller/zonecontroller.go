@@ -36,6 +36,17 @@ func RunZoneController(zone *model.Zone, dbConn *sql.DB) {
 		for {
 			time.Sleep(time.Duration(env.Cfg.PollIntervalSeconds) * time.Second)
 
+			// Check if system is in override mode - if so, skip normal zone control
+			overrideActive, err := db.GetSystemOverride(dbConn)
+			if err != nil {
+				log.Error().Err(err).Str("zone", zone.ID).Msg("Could not check override status")
+				continue
+			}
+			if overrideActive {
+				log.Debug().Str("zone", zone.ID).Msg("System override active - skipping zone control")
+				continue
+			}
+
 			// Refresh zone from db
 			zone, err = db.GetZoneByID(dbConn, zone.ID)
 			if err != nil {

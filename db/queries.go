@@ -308,3 +308,14 @@ func GetMainPowerPin(db *sql.DB) (model.GPIOPin, error) {
 		ActiveHigh: activeHigh,
 	}, nil
 }
+
+// GetSystemOverride retrieves the current override state.
+func GetSystemOverride(db *sql.DB) (bool, error) {
+	var overrideActive bool
+	err := db.QueryRow(`SELECT override_active FROM system WHERE id = 1`).Scan(&overrideActive)
+	if err != nil {
+		return false, fmt.Errorf("failed to get system override state: %w", err)
+	}
+	return overrideActive, nil
+}
+

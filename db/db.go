@@ -41,7 +41,13 @@ func InitializeIfMissing() (bool, error) {
 		// Seed the database
 		return firstRun, SeedDatabase()
 	}
-	return firstRun, nil // DB file exists, no action needed
+	
+	// DB file exists, check for migrations
+	if err := ApplyMigrations(); err != nil {
+		return firstRun, err
+	}
+	
+	return firstRun, nil
 }
 
 func ApplySchema() error {
@@ -80,8 +86,8 @@ func SeedDatabase() error {
 	defer tx.Rollback()
 
 	// Insert system record
-	_, err = tx.Exec(`INSERT OR REPLACE INTO system (id, system_mode, main_power_pin_number, main_power_pin_active_high, temp_sensor_bus_pin) VALUES (1, ?, ?, ?, ?)`,
-		model.ModeOff, cfg.MainPowerGPIO, cfg.MainPowerActiveHigh, cfg.TempSensorBusGPIO)
+	_, err = tx.Exec(`INSERT OR REPLACE INTO system (id, system_mode, main_power_pin_number, main_power_pin_active_high, temp_sensor_bus_pin, override_active, prior_system_mode) VALUES (1, ?, ?, ?, ?, ?, ?)`,
+		model.ModeOff, cfg.MainPowerGPIO, cfg.MainPowerActiveHigh, cfg.TempSensorBusGPIO, false, nil)
 	if err != nil {
 		return fmt.Errorf("failed to insert system record: %w", err)
 	}
@@ -176,5 +182,60 @@ func ValidateDatabase() error {
 	}
 
 	log.Info().Msg("Database validated")
+	return nil
+}
+
+func ApplyMigrations() error {
+	db, err := sql.Open("sqlite3", cfg.DBPath)
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+	defer db.Close()
+
+	// Check if override columns exist
+	var overrideActiveExists, priorSystemModeExists bool
+	
+	rows, err := db.Query("PRAGMA table_info(system)")
+	if err != nil {
+		return fmt.Errorf("failed to get table info: %w", err)
+	}
+	defer rows.Close()
+	
+	for rows.Next() {
+		var cid int
+		var name, dataType string
+		var notNull bool
+		var defaultValue *string
+		var pk int
+		
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("failed to scan column info: %w", err)
+		}
+		
+		if name == "override_active" {
+			overrideActiveExists = true
+		}
+		if name == "prior_system_mode" {
+			priorSystemModeExists = true
+		}
+	}
+	
+	// Add missing columns
+	if !overrideActiveExists {
+		_, err = db.Exec("ALTER TABLE system ADD COLUMN override_active BOOLEAN DEFAULT FALSE")
+		if err != nil {
+			return fmt.Errorf("failed to add override_active column: %w", err)
+		}
+		log.Info().Msg("Added override_active column to system table")
+	}
+	
+	if !priorSystemModeExists {
+		_, err = db.Exec("ALTER TABLE system ADD COLUMN prior_system_mode TEXT DEFAULT NULL")
+		if err != nil {
+			return fmt.Errorf("failed to add prior_system_mode column: %w", err)
+		}
+		log.Info().Msg("Added prior_system_mode column to system table")
+	}
+	
 	return nil
 }

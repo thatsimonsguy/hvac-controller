@@ -122,3 +122,59 @@ func SwapPrimaryHeatPump(db *sql.DB) error {
 
 	return tx.Commit()
 }
+
+func SetSystemOverride(db *sql.DB, newMode model.SystemMode) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("start transaction: %w", err)
+	}
+	
+	// Get current mode to store as prior
+	var currentMode string
+	err = tx.QueryRow(`SELECT system_mode FROM system WHERE id = 1`).Scan(&currentMode)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to get current system mode: %w", err)
+	}
+	
+	// Set override active, store prior mode, and set new mode
+	_, err = tx.Exec(`UPDATE system SET override_active = TRUE, prior_system_mode = ?, system_mode = ? WHERE id = 1`, 
+		currentMode, string(newMode))
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to set system override: %w", err)
+	}
+	
+	return tx.Commit()
+}
+
+func ClearSystemOverride(db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("start transaction: %w", err)
+	}
+	
+	// Get prior mode to restore
+	var priorMode sql.NullString
+	err = tx.QueryRow(`SELECT prior_system_mode FROM system WHERE id = 1`).Scan(&priorMode)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to get prior system mode: %w", err)
+	}
+	
+	// If no prior mode stored, default to off
+	restoreMode := model.ModeOff
+	if priorMode.Valid && priorMode.String != "" {
+		restoreMode = model.SystemMode(priorMode.String)
+	}
+	
+	// Clear override and restore prior mode
+	_, err = tx.Exec(`UPDATE system SET override_active = FALSE, prior_system_mode = NULL, system_mode = ? WHERE id = 1`, 
+		string(restoreMode))
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to clear system override: %w", err)
+	}
+	
+	return tx.Commit()
+}
