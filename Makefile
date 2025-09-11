@@ -1,3 +1,10 @@
+# Basic build and run targets
+build:
+	go build -o hvac-controller ./cmd/hvac-controller/main.go
+
+run:
+	./hvac-controller
+
 # System mode control targets
 system-off:
 	go run ./cmd/debug/main.go -cmd set-system-mode -mode off

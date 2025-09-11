@@ -53,6 +53,8 @@ func RunFailsafeController(dbConn *sql.DB) {
 		for {
 			time.Sleep(time.Duration(env.Cfg.PollIntervalSeconds) * time.Second)
 
+			log.Info().Msg("Failsafe controller running evaluation cycle")
+
 			// Gather all current state
 			zones, err := db.GetAllZones(dbConn)
 			if err != nil {
@@ -127,11 +129,16 @@ func evaluateFailsafeActions(zoneStates []ZoneState, overrideActive bool, minTem
 			continue
 		}
 
-		log.Debug().
+		deltaFromMin := zoneState.Temperature - minTemp
+		deltaFromMax := zoneState.Temperature - maxTemp
+
+		log.Info().
 			Str("zone", zoneState.Zone.ID).
 			Float64("temp", zoneState.Temperature).
 			Float64("min_threshold", minTemp).
 			Float64("max_threshold", maxTemp).
+			Float64("delta_from_min", deltaFromMin).
+			Float64("delta_from_max", deltaFromMax).
 			Bool("override_active", overrideActive).
 			Msg("Evaluating zone for failsafe conditions")
 

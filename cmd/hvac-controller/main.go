@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/rs/zerolog/log"
 
@@ -80,8 +81,15 @@ func main() {
 	for _, zone := range zones {
 		zonecontroller.RunZoneController(&zone, dbConn)
 	}
+	
+	// Stagger controller startups to avoid CPU spikes and race conditions
+	time.Sleep(3 * time.Second)
 	buffercontroller.RunBufferController(dbConn)
+	
+	time.Sleep(3 * time.Second)
 	recirculationcontroller.RunRecirculationController(dbConn)
+	
+	time.Sleep(3 * time.Second)
 	failsafecontroller.RunFailsafeController(dbConn)
 
 	sig := make(chan os.Signal, 1)

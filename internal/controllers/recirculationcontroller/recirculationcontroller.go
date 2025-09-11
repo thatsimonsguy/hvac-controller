@@ -30,6 +30,8 @@ func RunRecirculationController(dbConn *sql.DB) {
 		for {
 			time.Sleep(time.Duration(env.Cfg.PollIntervalSeconds) * time.Second)
 
+			log.Info().Msg("Recirculation controller running evaluation cycle")
+
 			zones, err := db.GetAllZones(dbConn)
 			if err != nil {
 				log.Error().Err(err).Msg("Could not retrieve zones from db")
@@ -65,11 +67,16 @@ func evaluateRecirculation(handler *model.AirHandler, sysMode model.SystemMode) 
 	pumpActive := currentlyActive(handler.CircPumpPin)
 	timeSinceLastToggle := now.Sub(handler.LastChanged)
 
-	log.Debug().
+	timeUntilRecirc := RecirculationInterval - timeSinceLastToggle
+	needsRecirculation := timeSinceLastToggle > RecirculationInterval
+
+	log.Info().
 		Str("zone", handler.Zone.ID).
 		Bool("blower_active", blowerActive).
 		Bool("pump_active", pumpActive).
 		Dur("time_since_last_toggle", timeSinceLastToggle).
+		Dur("time_until_recirc", timeUntilRecirc).
+		Bool("needs_recirculation", needsRecirculation).
 		Str("system_mode", string(sysMode)).
 		Msg("Evaluating recirculation for air handler")
 
