@@ -23,7 +23,8 @@ type Server struct {
 }
 
 type SystemModeResponse struct {
-	Mode string `json:"mode"`
+	Mode       string  `json:"mode"`
+	BufferTemp float64 `json:"buffer_temp"`
 }
 
 type SystemModeRequest struct {
@@ -68,7 +69,7 @@ func (s *Server) Start(port int) error {
 	mux.HandleFunc("/api/zones", s.handleZones)
 	mux.HandleFunc("/api/zones/", s.handleZoneOperations)
 	
-	addr := fmt.Sprintf("localhost:%d", port)
+	addr := fmt.Sprintf("0.0.0.0:%d", port)
 	log.Info().Str("address", addr).Msg("Starting REST API server")
 	
 	return http.ListenAndServe(addr, mux)
@@ -139,7 +140,13 @@ func (s *Server) getSystemMode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	response := SystemModeResponse{Mode: string(mode)}
+	// Get buffer tank temperature
+	bufferTemp, _ := s.tempService.GetTemperature("buffer_tank")
+	
+	response := SystemModeResponse{
+		Mode:       string(mode),
+		BufferTemp: bufferTemp,
+	}
 	s.writeJSON(w, http.StatusOK, response)
 }
 

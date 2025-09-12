@@ -125,6 +125,8 @@ func TestGetSystemMode(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 	assert.Equal(t, "off", response.Mode)
+	// Buffer temp will be 0 since there's no temperature service data in test
+	assert.Equal(t, 0.0, response.BufferTemp)
 }
 
 func TestSetSystemMode(t *testing.T) {
