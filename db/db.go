@@ -193,7 +193,7 @@ func ApplyMigrations() error {
 	defer db.Close()
 
 	// Check if override columns exist
-	var overrideActiveExists, priorSystemModeExists bool
+	var overrideActiveExists, priorSystemModeExists, recirculationActiveExists, recirculationStartedAtExists bool
 	
 	rows, err := db.Query("PRAGMA table_info(system)")
 	if err != nil {
@@ -218,6 +218,12 @@ func ApplyMigrations() error {
 		if name == "prior_system_mode" {
 			priorSystemModeExists = true
 		}
+		if name == "recirculation_active" {
+			recirculationActiveExists = true
+		}
+		if name == "recirculation_started_at" {
+			recirculationStartedAtExists = true
+		}
 	}
 	
 	// Add missing columns
@@ -235,6 +241,22 @@ func ApplyMigrations() error {
 			return fmt.Errorf("failed to add prior_system_mode column: %w", err)
 		}
 		log.Info().Msg("Added prior_system_mode column to system table")
+	}
+	
+	if !recirculationActiveExists {
+		_, err = db.Exec("ALTER TABLE system ADD COLUMN recirculation_active BOOLEAN DEFAULT FALSE")
+		if err != nil {
+			return fmt.Errorf("failed to add recirculation_active column: %w", err)
+		}
+		log.Info().Msg("Added recirculation_active column to system table")
+	}
+	
+	if !recirculationStartedAtExists {
+		_, err = db.Exec("ALTER TABLE system ADD COLUMN recirculation_started_at TEXT")
+		if err != nil {
+			return fmt.Errorf("failed to add recirculation_started_at column: %w", err)
+		}
+		log.Info().Msg("Added recirculation_started_at column to system table")
 	}
 	
 	return nil
