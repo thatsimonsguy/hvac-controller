@@ -156,10 +156,20 @@ func RunZoneController(zone *model.Zone, dbConn *sql.DB, tempService Temperature
 					Float64("thresdhold", threshold).
 					Float64("secondary_threshold", secondaryThreshold).Msg("debug: zone evaluation failure")
 
-				// turn everything off
+				// turn everything off (but respect recirculation override for blower)
 				if handler != nil {
 					device.DeactivateAirHandler(handler, dbConn)
-					device.DeactivateBlower(handler, dbConn)
+					
+					// Check if recirculation is active before deactivating blower
+					recircActive, _, err := db.GetRecirculationStatus(dbConn)
+					if err != nil {
+						log.Error().Err(err).Msg("Failed to check recirculation status")
+					}
+					if !recircActive {
+						device.DeactivateBlower(handler, dbConn)
+					} else {
+						log.Debug().Str("zone", zone.ID).Msg("Skipping blower deactivation - recirculation active")
+					}
 				}
 				if loop != nil {
 					device.DeactivateRadiantLoop(loop, dbConn)
@@ -173,7 +183,16 @@ func RunZoneController(zone *model.Zone, dbConn *sql.DB, tempService Temperature
 					device.ActivateBlower(handler, dbConn)
 				}
 				if switchMap["deactivate_blower"] {
-					device.DeactivateBlower(handler, dbConn)
+					// Check if recirculation is active before deactivating blower
+					recircActive, _, err := db.GetRecirculationStatus(dbConn)
+					if err != nil {
+						log.Error().Err(err).Msg("Failed to check recirculation status")
+					}
+					if !recircActive {
+						device.DeactivateBlower(handler, dbConn)
+					} else {
+						log.Debug().Str("zone", zone.ID).Msg("Skipping blower deactivation - recirculation active")
+					}
 				}
 				if switchMap["activate_pump"] {
 					device.ActivateAirHandler(handler, dbConn)

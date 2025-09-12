@@ -82,6 +82,40 @@ func UpdateDeviceLastChanged(db *sql.DB, deviceName string, timestamp time.Time)
 	return tx.Commit()
 }
 
+func SetRecirculationActive(db *sql.DB, active bool, startedAt time.Time) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("start transaction: %w", err)
+	}
+	
+	var startedAtStr *string
+	if active {
+		s := startedAt.Format(time.RFC3339)
+		startedAtStr = &s
+	}
+	
+	_, err = tx.Exec(`UPDATE system SET recirculation_active = ?, recirculation_started_at = ? WHERE id = 1`, active, startedAtStr)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("update recirculation active: %w", err)
+	}
+	return tx.Commit()
+}
+
+func GetRecirculationStatus(db *sql.DB) (active bool, startedAt time.Time, err error) {
+	var startedAtStr sql.NullString
+	err = db.QueryRow(`SELECT recirculation_active, recirculation_started_at FROM system WHERE id = 1`).Scan(&active, &startedAtStr)
+	if err != nil {
+		return false, time.Time{}, fmt.Errorf("query recirculation status: %w", err)
+	}
+	
+	if startedAtStr.Valid {
+		startedAt, _ = time.Parse(time.RFC3339, startedAtStr.String)
+	}
+	
+	return active, startedAt, nil
+}
+
 func UpdateDeviceOnlineStatus(db *sql.DB, id int, online bool) error {
 	tx, err := db.Begin()
 	if err != nil {

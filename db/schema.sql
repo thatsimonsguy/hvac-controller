@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS system (
     temp_sensor_bus_pin INTEGER,
     override_active BOOLEAN DEFAULT FALSE,
     prior_system_mode TEXT DEFAULT NULL,
+    recirculation_active BOOLEAN DEFAULT FALSE,
+    recirculation_started_at TEXT,  -- ISO8601 timestamp when recirculation started
     UNIQUE (id)  -- Ensure singleton record
 );
 

@@ -32,6 +32,19 @@ func RunRecirculationController(dbConn *sql.DB) {
 
 			log.Info().Msg("Recirculation controller running evaluation cycle")
 
+			// Safety check: clear recirculation override if it's been active too long
+			recircActive, startedAt, err := db.GetRecirculationStatus(dbConn)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to check recirculation status")
+			} else if recircActive && time.Since(startedAt) > RecirculationDuration*2 {
+				log.Warn().
+					Dur("duration", time.Since(startedAt)).
+					Msg("Recirculation has been active too long - clearing override")
+				if err := db.SetRecirculationActive(dbConn, false, time.Time{}); err != nil {
+					log.Error().Err(err).Msg("Failed to clear stuck recirculation flag")
+				}
+			}
+
 			zones, err := db.GetAllZones(dbConn)
 			if err != nil {
 				log.Error().Err(err).Msg("Could not retrieve zones from db")
@@ -86,6 +99,13 @@ func evaluateRecirculation(handler *model.AirHandler, sysMode model.SystemMode, 
 				Str("zone", handler.Zone.ID).
 				Msg("Activating blower for recirculation - 12+ hours since last activity")
 			activateBlower(handler, dbConn)
+			
+			// Set recirculation override to prevent zone controller from immediately turning it off
+			if dbConn != nil {
+				if err := db.SetRecirculationActive(dbConn, true, now); err != nil {
+					log.Error().Err(err).Msg("Failed to set recirculation active flag")
+				}
+			}
 		}
 		return
 	}
@@ -111,6 +131,13 @@ func evaluateRecirculation(handler *model.AirHandler, sysMode model.SystemMode, 
 					Str("zone", handler.Zone.ID).
 					Msg("Deactivating blower after 15min recirculation")
 				deactivateBlower(handler, dbConn)
+				
+				// Clear recirculation override
+				if dbConn != nil {
+					if err := db.SetRecirculationActive(dbConn, false, time.Time{}); err != nil {
+						log.Error().Err(err).Msg("Failed to clear recirculation active flag")
+					}
+				}
 			}
 		}
 	}

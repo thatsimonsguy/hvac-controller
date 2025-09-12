@@ -1,6 +1,7 @@
 package recirculationcontroller
 
 import (
+	"database/sql"
 	"testing"
 	"time"
 
@@ -61,15 +62,15 @@ func TestEvaluateRecirculation_BlowerOffMoreThan12Hours(t *testing.T) {
 		canToggle = origCanToggle
 	}()
 
-	activateBlower = func(*model.AirHandler) { activateCalled = true }
-	deactivateBlower = func(*model.AirHandler) { deactivateCalled = true }
+	activateBlower = func(*model.AirHandler, *sql.DB) { activateCalled = true }
+	deactivateBlower = func(*model.AirHandler, *sql.DB) { deactivateCalled = true }
 	canToggle = func(*model.Device, time.Time) bool { return true }
 
 	origCurrentlyActive := currentlyActive
 	defer func() { currentlyActive = origCurrentlyActive }()
 	currentlyActive = func(model.GPIOPin) bool { return false }
 
-	evaluateRecirculation(handler, model.ModeOff)
+	evaluateRecirculation(handler, model.ModeOff, nil)
 
 	assert.True(t, activateCalled)
 	assert.False(t, deactivateCalled)
@@ -96,8 +97,8 @@ func TestEvaluateRecirculation_BlowerOnWithPumpActive(t *testing.T) {
 		canToggle = origCanToggle
 	}()
 
-	activateBlower = func(*model.AirHandler) { activateCalled = true }
-	deactivateBlower = func(*model.AirHandler) { deactivateCalled = true }
+	activateBlower = func(*model.AirHandler, *sql.DB) { activateCalled = true }
+	deactivateBlower = func(*model.AirHandler, *sql.DB) { deactivateCalled = true }
 	canToggle = func(*model.Device, time.Time) bool { return true }
 
 	origCurrentlyActive := currentlyActive
@@ -112,7 +113,7 @@ func TestEvaluateRecirculation_BlowerOnWithPumpActive(t *testing.T) {
 		return true
 	}
 
-	evaluateRecirculation(handler, model.ModeHeating)
+	evaluateRecirculation(handler, model.ModeHeating, nil)
 
 	assert.False(t, activateCalled)
 	assert.False(t, deactivateCalled)
@@ -139,8 +140,8 @@ func TestEvaluateRecirculation_BlowerOnSystemCirculate(t *testing.T) {
 		canToggle = origCanToggle
 	}()
 
-	activateBlower = func(*model.AirHandler) { activateCalled = true }
-	deactivateBlower = func(*model.AirHandler) { deactivateCalled = true }
+	activateBlower = func(*model.AirHandler, *sql.DB) { activateCalled = true }
+	deactivateBlower = func(*model.AirHandler, *sql.DB) { deactivateCalled = true }
 	canToggle = func(*model.Device, time.Time) bool { return true }
 
 	origCurrentlyActive := currentlyActive
@@ -155,7 +156,7 @@ func TestEvaluateRecirculation_BlowerOnSystemCirculate(t *testing.T) {
 		return false
 	}
 
-	evaluateRecirculation(handler, model.ModeCirculate)
+	evaluateRecirculation(handler, model.ModeCirculate, nil)
 
 	assert.False(t, activateCalled)
 	assert.False(t, deactivateCalled)
@@ -185,8 +186,8 @@ func TestEvaluateRecirculation_BlowerOnMoreThan15Minutes(t *testing.T) {
 		canToggle = origCanToggle
 	}()
 
-	activateBlower = func(*model.AirHandler) { activateCalled = true }
-	deactivateBlower = func(*model.AirHandler) { deactivateCalled = true }
+	activateBlower = func(*model.AirHandler, *sql.DB) { activateCalled = true }
+	deactivateBlower = func(*model.AirHandler, *sql.DB) { deactivateCalled = true }
 	canToggle = func(*model.Device, time.Time) bool { return true }
 
 	origCurrentlyActive := currentlyActive
@@ -201,7 +202,7 @@ func TestEvaluateRecirculation_BlowerOnMoreThan15Minutes(t *testing.T) {
 		return false
 	}
 
-	evaluateRecirculation(handler, model.ModeHeating)
+	evaluateRecirculation(handler, model.ModeHeating, nil)
 
 	assert.False(t, activateCalled)
 	assert.True(t, deactivateCalled)
