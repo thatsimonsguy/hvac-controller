@@ -32,7 +32,7 @@ func SetSystemMode(dbConn *sql.DB, mode model.SystemMode) error {
 			canToggle,
 			online,
 			hp.MinOn,
-			func() { device.DeactivateHeatPump(&hp) },
+			func() { device.DeactivateHeatPump(&hp, dbConn) },
 			time.Sleep)
 
 		if should && modeActive {

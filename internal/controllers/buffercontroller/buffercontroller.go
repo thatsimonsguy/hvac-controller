@@ -93,8 +93,8 @@ func RunBufferController(dbConn *sql.DB, tempService TemperatureService) {
 					gpio.CurrentlyActive(sources.Primary.Pin),
 					bufferTemp,
 					mode,
-					func() { device.ActivateHeatPump(sources.Primary) },
-					func() { device.DeactivateHeatPump(sources.Primary) },
+					func() { device.ActivateHeatPump(sources.Primary, dbConn) },
+					func() { device.DeactivateHeatPump(sources.Primary, dbConn) },
 				)
 			}
 
@@ -105,8 +105,8 @@ func RunBufferController(dbConn *sql.DB, tempService TemperatureService) {
 					gpio.CurrentlyActive(sources.Secondary.Pin),
 					bufferTemp,
 					mode,
-					func() { device.ActivateHeatPump(sources.Secondary) },
-					func() { device.DeactivateHeatPump(sources.Secondary) },
+					func() { device.ActivateHeatPump(sources.Secondary, dbConn) },
+					func() { device.DeactivateHeatPump(sources.Secondary, dbConn) },
 				)
 			}
 
@@ -117,8 +117,8 @@ func RunBufferController(dbConn *sql.DB, tempService TemperatureService) {
 					gpio.CurrentlyActive(sources.Tertiary.Pin),
 					bufferTemp,
 					mode,
-					func() { device.ActivateBoiler(sources.Tertiary) },
-					func() { device.DeactivateBoiler(sources.Tertiary) },
+					func() { device.ActivateBoiler(sources.Tertiary, dbConn) },
+					func() { device.DeactivateBoiler(sources.Tertiary, dbConn) },
 				)
 			}
 

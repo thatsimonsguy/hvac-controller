@@ -158,11 +158,11 @@ func RunZoneController(zone *model.Zone, dbConn *sql.DB, tempService Temperature
 
 				// turn everything off
 				if handler != nil {
-					device.DeactivateAirHandler(handler)
-					device.DeactivateBlower(handler)
+					device.DeactivateAirHandler(handler, dbConn)
+					device.DeactivateBlower(handler, dbConn)
 				}
 				if loop != nil {
-					device.DeactivateRadiantLoop(loop)
+					device.DeactivateRadiantLoop(loop, dbConn)
 				}
 				continue
 			}
@@ -170,25 +170,25 @@ func RunZoneController(zone *model.Zone, dbConn *sql.DB, tempService Temperature
 			// no errors, so use our switchMap to turn things off and on
 			if handler != nil {
 				if switchMap["activate_blower"] {
-					device.ActivateBlower(handler)
+					device.ActivateBlower(handler, dbConn)
 				}
 				if switchMap["deactivate_blower"] {
-					device.DeactivateBlower(handler)
+					device.DeactivateBlower(handler, dbConn)
 				}
 				if switchMap["activate_pump"] {
-					device.ActivateAirHandler(handler)
+					device.ActivateAirHandler(handler, dbConn)
 				}
 				if switchMap["deactivate_pump"] {
-					device.DeactivateAirHandler(handler)
+					device.DeactivateAirHandler(handler, dbConn)
 				}
 			}
 
 			if loop != nil {
 				if switchMap["activate_loop"] {
-					device.ActivateRadiantLoop(loop)
+					device.ActivateRadiantLoop(loop, dbConn)
 				}
 				if switchMap["deactivate_loop"] {
-					device.DeactivateRadiantLoop(loop)
+					device.DeactivateRadiantLoop(loop, dbConn)
 				}
 			}
 

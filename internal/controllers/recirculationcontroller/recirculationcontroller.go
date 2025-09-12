@@ -55,13 +55,13 @@ func RunRecirculationController(dbConn *sql.DB) {
 					continue
 				}
 
-				evaluateRecirculation(handler, sysMode)
+				evaluateRecirculation(handler, sysMode, dbConn)
 			}
 		}
 	}()
 }
 
-func evaluateRecirculation(handler *model.AirHandler, sysMode model.SystemMode) {
+func evaluateRecirculation(handler *model.AirHandler, sysMode model.SystemMode, dbConn *sql.DB) {
 	now := time.Now()
 	blowerActive := currentlyActive(handler.Pin)
 	pumpActive := currentlyActive(handler.CircPumpPin)
@@ -85,7 +85,7 @@ func evaluateRecirculation(handler *model.AirHandler, sysMode model.SystemMode) 
 			log.Info().
 				Str("zone", handler.Zone.ID).
 				Msg("Activating blower for recirculation - 12+ hours since last activity")
-			activateBlower(handler)
+			activateBlower(handler, dbConn)
 		}
 		return
 	}
@@ -110,7 +110,7 @@ func evaluateRecirculation(handler *model.AirHandler, sysMode model.SystemMode) 
 				log.Info().
 					Str("zone", handler.Zone.ID).
 					Msg("Deactivating blower after 15min recirculation")
-				deactivateBlower(handler)
+				deactivateBlower(handler, dbConn)
 			}
 		}
 	}

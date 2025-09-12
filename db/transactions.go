@@ -69,6 +69,19 @@ func UpdateZoneMode(db *sql.DB, id string, mode model.SystemMode) error {
 	return tx.Commit()
 }
 
+func UpdateDeviceLastChanged(db *sql.DB, deviceName string, timestamp time.Time) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("start transaction: %w", err)
+	}
+	_, err = tx.Exec(`UPDATE devices SET last_changed = ? WHERE name = ?`, timestamp.Format(time.RFC3339), deviceName)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("update device last_changed: %w", err)
+	}
+	return tx.Commit()
+}
+
 func UpdateDeviceOnlineStatus(db *sql.DB, id int, online bool) error {
 	tx, err := db.Begin()
 	if err != nil {

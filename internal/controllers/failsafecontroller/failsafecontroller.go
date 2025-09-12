@@ -253,12 +253,12 @@ func activateZoneDistribution(dbConn *sql.DB, zoneID string, mode model.SystemMo
 		if device.CanToggle(&handler.Device, time.Now()) {
 			if mode == model.ModeCooling {
 				log.Info().Str("zone", zoneID).Msg("Activating air handler for failsafe cooling")
-				device.ActivateBlower(handler)
-				device.ActivateAirHandler(handler)
+				device.ActivateBlower(handler, dbConn)
+				device.ActivateAirHandler(handler, dbConn)
 			} else if mode == model.ModeHeating {
 				log.Info().Str("zone", zoneID).Msg("Activating air handler for failsafe heating")
-				device.ActivateBlower(handler)
-				device.ActivateAirHandler(handler)
+				device.ActivateBlower(handler, dbConn)
+				device.ActivateAirHandler(handler, dbConn)
 			}
 		}
 	}
@@ -267,7 +267,7 @@ func activateZoneDistribution(dbConn *sql.DB, zoneID string, mode model.SystemMo
 	if err == nil && loop != nil && mode == model.ModeHeating {
 		if device.CanToggle(&loop.Device, time.Now()) {
 			log.Info().Str("zone", zoneID).Msg("Activating radiant loop for failsafe heating")
-			device.ActivateRadiantLoop(loop)
+			device.ActivateRadiantLoop(loop, dbConn)
 		}
 	}
 }
@@ -277,8 +277,8 @@ func deactivateZoneDistribution(dbConn *sql.DB, zoneID string) {
 	if err == nil && handler != nil {
 		if device.CanToggle(&handler.Device, time.Now()) {
 			log.Info().Str("zone", zoneID).Msg("Deactivating air handler after failsafe")
-			device.DeactivateAirHandler(handler)
-			device.DeactivateBlower(handler)
+			device.DeactivateAirHandler(handler, dbConn)
+			device.DeactivateBlower(handler, dbConn)
 		}
 	}
 
@@ -286,7 +286,7 @@ func deactivateZoneDistribution(dbConn *sql.DB, zoneID string) {
 	if err == nil && loop != nil {
 		if device.CanToggle(&loop.Device, time.Now()) {
 			log.Info().Str("zone", zoneID).Msg("Deactivating radiant loop after failsafe")
-			device.DeactivateRadiantLoop(loop)
+			device.DeactivateRadiantLoop(loop, dbConn)
 		}
 	}
 }
