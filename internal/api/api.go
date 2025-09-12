@@ -32,11 +32,12 @@ type SystemModeRequest struct {
 }
 
 type ZoneResponse struct {
-	ID          string  `json:"id"`
-	Label       string  `json:"label"`
-	Setpoint    float64 `json:"setpoint"`
-	Mode        string  `json:"mode"`
-	CurrentTemp float64 `json:"current_temp"`
+	ID           string   `json:"id"`
+	Label        string   `json:"label"`
+	Setpoint     float64  `json:"setpoint"`
+	Mode         string   `json:"mode"`
+	CurrentTemp  float64  `json:"current_temp"`
+	Capabilities []string `json:"capabilities"`
 }
 
 type ZoneSetpointRequest struct {
@@ -62,12 +63,12 @@ func NewServer(database *sql.DB, tempService *temperature.Service, cfg *config.C
 func (s *Server) Start(port int) error {
 	mux := http.NewServeMux()
 	
-	// Add CORS middleware
+	// Add CORS middleware - Allow all origins for local network access
 	corsHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Set CORS headers
+		// Set CORS headers to allow all origins
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
 		
 		// Handle preflight OPTIONS requests
 		if r.Method == "OPTIONS" {
@@ -202,11 +203,12 @@ func (s *Server) getZones(w http.ResponseWriter, r *http.Request) {
 	for _, zone := range zones {
 		temp, _ := s.tempService.GetTemperature(zone.Sensor.ID)
 		response = append(response, ZoneResponse{
-			ID:          zone.ID,
-			Label:       zone.Label,
-			Setpoint:    zone.Setpoint,
-			Mode:        string(zone.Mode),
-			CurrentTemp: temp,
+			ID:           zone.ID,
+			Label:        zone.Label,
+			Setpoint:     zone.Setpoint,
+			Mode:         string(zone.Mode),
+			CurrentTemp:  temp,
+			Capabilities: zone.Capabilities,
 		})
 	}
 	
@@ -227,11 +229,12 @@ func (s *Server) getZone(w http.ResponseWriter, r *http.Request, zoneID string) 
 	
 	temp, _ := s.tempService.GetTemperature(zone.Sensor.ID)
 	response := ZoneResponse{
-		ID:          zone.ID,
-		Label:       zone.Label,
-		Setpoint:    zone.Setpoint,
-		Mode:        string(zone.Mode),
-		CurrentTemp: temp,
+		ID:           zone.ID,
+		Label:        zone.Label,
+		Setpoint:     zone.Setpoint,
+		Mode:         string(zone.Mode),
+		CurrentTemp:  temp,
+		Capabilities: zone.Capabilities,
 	}
 	
 	s.writeJSON(w, http.StatusOK, response)

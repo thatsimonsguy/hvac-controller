@@ -1,2 +1,3 @@
 # ignore the binary
 /hvac-controller
+/test-hvac.db
