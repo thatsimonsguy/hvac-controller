@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/thatsimonsguy/hvac-controller/db"
+	"github.com/thatsimonsguy/hvac-controller/internal/api"
 	"github.com/thatsimonsguy/hvac-controller/internal/config"
 	"github.com/thatsimonsguy/hvac-controller/internal/controllers/buffercontroller"
 	"github.com/thatsimonsguy/hvac-controller/internal/controllers/failsafecontroller"
@@ -97,14 +98,18 @@ func main() {
 	time.Sleep(3 * time.Second)
 	failsafecontroller.RunFailsafeController(dbConn, tempService)
 
+	// Start REST API server
+	apiServer := api.NewServer(dbConn, tempService, env.Cfg)
+	go func() {
+		if err := apiServer.Start(8080); err != nil {
+			log.Error().Err(err).Msg("REST API server failed to start")
+		}
+	}()
+
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 
 	<-sig
 	log.Info().Msg("Shutdown signal received — exiting")
 	shutdown.Shutdown()
-
-	// @todo: start HTTP server
-
-	select {} // block forever for now
 }
