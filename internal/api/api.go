@@ -62,6 +62,22 @@ func NewServer(database *sql.DB, tempService *temperature.Service, cfg *config.C
 func (s *Server) Start(port int) error {
 	mux := http.NewServeMux()
 	
+	// Add CORS middleware
+	corsHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set CORS headers
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		
+		// Handle preflight OPTIONS requests
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		
+		mux.ServeHTTP(w, r)
+	})
+	
 	// System mode endpoints
 	mux.HandleFunc("/api/system/mode", s.handleSystemMode)
 	
@@ -72,7 +88,7 @@ func (s *Server) Start(port int) error {
 	addr := fmt.Sprintf("0.0.0.0:%d", port)
 	log.Info().Str("address", addr).Msg("Starting REST API server")
 	
-	return http.ListenAndServe(addr, mux)
+	return http.ListenAndServe(addr, corsHandler)
 }
 
 func (s *Server) handleSystemMode(w http.ResponseWriter, r *http.Request) {
