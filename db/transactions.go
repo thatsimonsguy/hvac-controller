@@ -116,6 +116,40 @@ func GetRecirculationStatus(db *sql.DB) (active bool, startedAt time.Time, err e
 	return active, startedAt, nil
 }
 
+func ResetAirHandlerTimestampsCLI(dbPath string) error {
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+	defer db.Close()
+
+	// Set timestamps to 13 hours ago to trigger recirculation
+	thirteenHoursAgo := time.Now().Add(-13 * time.Hour)
+	timestampStr := thirteenHoursAgo.Format(time.RFC3339)
+
+	// Update air handlers for basement and main_floor zones
+	zones := []string{"basement", "main_floor"}
+	
+	for _, zoneID := range zones {
+		result, err := db.Exec(`UPDATE devices 
+			SET last_changed = ? 
+			WHERE device_type = 'air_handler' AND zone_id = ?`, 
+			timestampStr, zoneID)
+		if err != nil {
+			return fmt.Errorf("failed to update %s air handler timestamp: %w", zoneID, err)
+		}
+		
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected > 0 {
+			fmt.Printf("Reset %s air handler last_changed to %s\n", zoneID, timestampStr)
+		} else {
+			fmt.Printf("No air handler found for zone %s\n", zoneID)
+		}
+	}
+	
+	return nil
+}
+
 func UpdateDeviceOnlineStatus(db *sql.DB, id int, online bool) error {
 	tx, err := db.Begin()
 	if err != nil {

@@ -16,7 +16,7 @@ func DebugCLI() {
 	var dbPath, command, zoneID, mode string
 	var setpoint float64
 	flag.StringVar(&dbPath, "db", "data/hvac.db", "Path to the SQLite database file")
-	flag.StringVar(&command, "cmd", "", "Command to run: set-system-mode, set-zone-mode, set-zone-setpoint")
+	flag.StringVar(&command, "cmd", "", "Command to run: set-system-mode, set-zone-mode, set-zone-setpoint, reset-air-handler-timestamps")
 	flag.StringVar(&zoneID, "zone", "", "Zone ID for zone commands")
 	flag.StringVar(&mode, "mode", "", "Mode for system or zone")
 	flag.Float64Var(&setpoint, "setpoint", 0, "Setpoint value for zone")
@@ -26,11 +26,13 @@ func DebugCLI() {
 	if *help || command == "" {
 		fmt.Println("\nUsage of hvac-debug:")
 		fmt.Println("  -db string\tPath to the SQLite database file (default 'hvac.db')")
-		fmt.Println("  -cmd string\tCommand to run: set-system-mode, set-zone-mode, set-zone-setpoint")
+		fmt.Println("  -cmd string\tCommand to run: set-system-mode, set-zone-mode, set-zone-setpoint, reset-air-handler-timestamps")
 		fmt.Println("  -zone string\tZone ID for zone commands")
 		fmt.Println("  -mode string\tMode for system or zone")
 		fmt.Println("  -setpoint float\tSetpoint value for zone")
 		fmt.Println("  -help\tShow this help message")
+		fmt.Println("\nCommands:")
+		fmt.Println("  reset-air-handler-timestamps\tReset basement and main_floor air handler timestamps to 13+ hours ago (triggers recirculation)")
 		os.Exit(0)
 	}
 
@@ -50,6 +52,8 @@ func DebugCLI() {
 			os.Exit(1)
 		}
 		err = db.SetZoneSetpointCLI(dbPath, zoneID, setpoint)
+	case "reset-air-handler-timestamps":
+		err = db.ResetAirHandlerTimestampsCLI(dbPath)
 	default:
 		fmt.Println("Invalid command")
 		os.Exit(1)

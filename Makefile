@@ -40,3 +40,7 @@ basement-temp:
 
 garage-temp:
 	go run ./cmd/debug/main.go -cmd set-zone-setpoint -zone garage -setpoint $(TEMP)
+
+# Debug utility targets
+reset-recirc-timers:
+	go run ./cmd/debug/main.go -cmd reset-air-handler-timestamps
