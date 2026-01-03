@@ -11,6 +11,7 @@
   "dd_tags": [
     "host:hvac-controller-pi"
   ],
+  "ntfy_topic": "hvac-controller-e09a60e98b08",
   "zone_max_temp": 85,
   "zone_min_temp": 60,
   "system_override_min_temp": 50,

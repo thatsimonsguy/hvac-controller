@@ -18,6 +18,7 @@ import (
 	"github.com/thatsimonsguy/hvac-controller/internal/controllers/zonecontroller"
 	"github.com/thatsimonsguy/hvac-controller/internal/datadog"
 	"github.com/thatsimonsguy/hvac-controller/internal/env"
+	"github.com/thatsimonsguy/hvac-controller/internal/notifications"
 	"github.com/thatsimonsguy/hvac-controller/internal/temperature"
 	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/logging"
@@ -32,6 +33,9 @@ func main() {
 	if env.Cfg.EnableDatadog {
 		datadog.InitMetrics()
 	}
+
+	// Initialize notifications
+	notifications.Init()
 
 	// Initialize the DB
 	db.InitConfig(env.Cfg)

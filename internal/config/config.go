@@ -49,6 +49,8 @@ type Config struct {
 	DDAgentAddr   string   `json:"dd_agent_addr"`
 	DDNamespace   string   `json:"dd_namespace"`
 	DDTags        []string `json:"dd_tags"`
+
+	NtfyTopic string `json:"ntfy_topic"`
 }
 
 // DeviceConfig and related structs
