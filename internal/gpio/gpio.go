@@ -85,6 +85,8 @@ func ValidateInitialPinStates(dbConn *sql.DB) error {
 	}
 	checks = append(checks, pinWithMeta{"main_power", mainPower, false})
 
+	// Set pins to safe states instead of just validating
+	correctedCount := 0
 	for _, check := range checks {
 		level, err := pinctrl.ReadLevel(check.Pin.Number)
 		if err != nil {
@@ -92,8 +94,28 @@ func ValidateInitialPinStates(dbConn *sql.DB) error {
 		}
 		isActive := (check.Pin.ActiveHigh && level) || (!check.Pin.ActiveHigh && !level)
 		if isActive != check.ShouldBeOn {
-			return fmt.Errorf("pin %d (%s) is in wrong state at startup (expected active=%v)", check.Pin.Number, check.Name, check.ShouldBeOn)
+			log.Warn().
+				Str("pin", check.Name).
+				Int("gpio", check.Pin.Number).
+				Bool("was_active", isActive).
+				Bool("should_be_active", check.ShouldBeOn).
+				Msg("Pin in unsafe state at startup - correcting")
+
+			if check.ShouldBeOn {
+				Activate(check.Pin)
+			} else {
+				Deactivate(check.Pin)
+			}
+			correctedCount++
 		}
+	}
+
+	if correctedCount > 0 {
+		log.Info().
+			Int("pins_corrected", correctedCount).
+			Msg("Corrected unsafe pin states at startup")
+	} else {
+		log.Info().Msg("All pins in safe state at startup")
 	}
 
 	return nil

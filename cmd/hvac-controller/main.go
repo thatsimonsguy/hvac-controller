@@ -70,7 +70,7 @@ func main() {
 	}
 
 	if err := gpio.ValidateInitialPinStates(dbConn); err != nil {
-		shutdown.ShutdownWithError(err, "Refusing to enable relay board due to unsafe pin states")
+		shutdown.ShutdownWithError(err, "Failed to initialize pin states")
 	}
 
 	mainPowerPin, err := db.GetMainPowerPin(dbConn)
