@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/thatsimonsguy/hvac-controller/db"
+	"github.com/thatsimonsguy/hvac-controller/internal/datadog"
 	"github.com/thatsimonsguy/hvac-controller/internal/env"
 	"github.com/thatsimonsguy/hvac-controller/internal/gpio"
 	"github.com/thatsimonsguy/hvac-controller/internal/model"
@@ -248,6 +249,7 @@ func (s *Service) processReading(sensorID, sensorZone string, temp float64, time
 	if !newReading.Valid {
 		history.AnomalyCount++
 		s.checkDisableThreshold(sensorID, history, temp)
+		datadog.Count("temperature.anomaly", 1, "sensor:"+sensorID, "zone:"+sensorZone, "reason:invalid")
 		return false
 	}
 
@@ -296,6 +298,7 @@ func (s *Service) processReading(sensorID, sensorZone string, temp float64, time
 			history.RecoveryCount = 0
 			// Use last good reading
 			s.readings[sensorID] = history.LastGoodReading
+			datadog.Count("temperature.anomaly", 1, "sensor:"+sensorID, "zone:"+sensorZone, "reason:disabled")
 			return false
 		}
 	}
@@ -325,6 +328,7 @@ func (s *Service) processReading(sensorID, sensorZone string, temp float64, time
 
 		// Use last good reading
 		s.readings[sensorID] = history.LastGoodReading
+		datadog.Count("temperature.anomaly", 1, "sensor:"+sensorID, "zone:"+sensorZone, "reason:out_of_range")
 		return false
 	}
 

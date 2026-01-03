@@ -35,3 +35,12 @@ func Gauge(name string, value float64, tags ...string) {
 		}
 	}
 }
+
+func Count(name string, value int64, tags ...string) {
+	if dogstatsd != nil {
+		err := dogstatsd.Count(name, value, tags, 1)
+		if err != nil && env.Cfg.EnableDatadog {
+			log.Warn().Err(err).Str("metric", name).Msg("Failed to emit count metric")
+		}
+	}
+}
