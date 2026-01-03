@@ -19,6 +19,9 @@ import (
 
 var safeMode bool
 
+// readPinLevel is a mockable wrapper for pinctrl.ReadLevel
+var readPinLevel = pinctrl.ReadLevel
+
 func ValidateInitialPinStates(dbConn *sql.DB) error {
 	type pinWithMeta struct {
 		Name       string
@@ -88,7 +91,7 @@ func ValidateInitialPinStates(dbConn *sql.DB) error {
 	// Set pins to safe states instead of just validating
 	correctedCount := 0
 	for _, check := range checks {
-		level, err := pinctrl.ReadLevel(check.Pin.Number)
+		level, err := readPinLevel(check.Pin.Number)
 		if err != nil {
 			return fmt.Errorf("failed to read pin level for %s (GPIO %d): %w", check.Name, check.Pin.Number, err)
 		}
