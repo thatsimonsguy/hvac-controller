@@ -12,6 +12,10 @@
     "host:hvac-controller-pi"
   ],
   "ntfy_topic": "hvac-controller-e09a60e98b08",
+  "temp_anomaly_max_delta": 5.0,
+  "temp_anomaly_garage_delta": 25.0,
+  "temp_max_anomalies": 6,
+  "temp_history_size": 20,
   "zone_max_temp": 85,
   "zone_min_temp": 60,
   "system_override_min_temp": 50,

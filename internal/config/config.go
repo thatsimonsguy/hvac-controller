@@ -51,6 +51,11 @@ type Config struct {
 	DDTags        []string `json:"dd_tags"`
 
 	NtfyTopic string `json:"ntfy_topic"`
+
+	TempAnomalyMaxDelta    float64 `json:"temp_anomaly_max_delta"`
+	TempAnomalyGarageDelta float64 `json:"temp_anomaly_garage_delta"`
+	TempMaxAnomalies       int     `json:"temp_max_anomalies"`
+	TempHistorySize        int     `json:"temp_history_size"`
 }
 
 // DeviceConfig and related structs
