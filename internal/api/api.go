@@ -48,6 +48,18 @@ type ZoneModeRequest struct {
 	Mode string `json:"mode"`
 }
 
+type DeviceResponse struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Zone        string `json:"zone,omitempty"`
+	Online      bool   `json:"online"`
+	Maintenance bool   `json:"maintenance"`
+}
+
+type DeviceMaintenanceRequest struct {
+	Maintenance bool `json:"maintenance"`
+}
+
 type ErrorResponse struct {
 	Error string `json:"error"`
 }
@@ -85,7 +97,11 @@ func (s *Server) Start(port int) error {
 	// Zone endpoints
 	mux.HandleFunc("/api/zones", s.handleZones)
 	mux.HandleFunc("/api/zones/", s.handleZoneOperations)
-	
+
+	// Device endpoints (maintenance mode)
+	mux.HandleFunc("/api/devices", s.handleDevices)
+	mux.HandleFunc("/api/devices/", s.handleDeviceOperations)
+
 	addr := fmt.Sprintf("0.0.0.0:%d", port)
 	log.Info().Str("address", addr).Msg("Starting REST API server")
 	
@@ -304,6 +320,83 @@ func (s *Server) setZoneSetpoint(w http.ResponseWriter, r *http.Request, zoneID 
 	}
 	
 	log.Info().Str("zone_id", zoneID).Float64("setpoint", req.Setpoint).Msg("Zone setpoint updated via API")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet && r.URL.Path == "/api/devices" {
+		s.getDevices(w, r)
+	} else {
+		s.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+	}
+}
+
+func (s *Server) handleDeviceOperations(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/devices/")
+	parts := strings.Split(path, "/")
+
+	if len(parts) < 1 || parts[0] == "" {
+		s.writeError(w, http.StatusNotFound, "Device name required")
+		return
+	}
+
+	deviceName := parts[0]
+
+	// /api/devices/{name}/maintenance
+	if len(parts) == 2 && parts[1] == "maintenance" {
+		if r.Method == http.MethodPut {
+			s.setDeviceMaintenance(w, r, deviceName)
+		} else {
+			s.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+		return
+	}
+
+	s.writeError(w, http.StatusNotFound, "Unknown operation")
+}
+
+func (s *Server) getDevices(w http.ResponseWriter, r *http.Request) {
+	statuses, err := db.GetAllDeviceStatuses(s.db)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get device statuses")
+		s.writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response := make([]DeviceResponse, 0, len(statuses))
+	for _, d := range statuses {
+		response = append(response, DeviceResponse{
+			Name:        d.Name,
+			Type:        d.Type,
+			Zone:        d.ZoneID,
+			Online:      d.Online,
+			Maintenance: !d.Online,
+		})
+	}
+
+	s.writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) setDeviceMaintenance(w http.ResponseWriter, r *http.Request, deviceName string) {
+	var req DeviceMaintenanceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.writeError(w, http.StatusBadRequest, "Invalid JSON payload")
+		return
+	}
+
+	// maintenance == true means the device is taken out of service (online = false).
+	online := !req.Maintenance
+	if err := db.SetDeviceOnlineByName(s.db, deviceName, online); err != nil {
+		if strings.Contains(err.Error(), "no device found") {
+			s.writeError(w, http.StatusNotFound, "Device not found")
+		} else {
+			log.Error().Err(err).Str("device", deviceName).Bool("maintenance", req.Maintenance).Msg("Failed to update device maintenance state")
+			s.writeError(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+
+	log.Info().Str("device", deviceName).Bool("maintenance", req.Maintenance).Msg("Device maintenance state updated via API")
 	w.WriteHeader(http.StatusOK)
 }
 

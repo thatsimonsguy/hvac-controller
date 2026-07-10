@@ -249,7 +249,11 @@ func executeFailsafeActions(dbConn *sql.DB, action FailsafeAction) {
 
 func activateZoneDistribution(dbConn *sql.DB, zoneID string, mode model.SystemMode) {
 	handler, err := db.GetAirHandlerByID(dbConn, zoneID)
-	if err == nil && handler != nil {
+	if err == nil && handler != nil && !handler.Online {
+		// Air handler is in maintenance mode - never energize it, even for a failsafe. Any radiant
+		// loop in the zone below is still eligible to provide failsafe heating.
+		log.Warn().Str("zone", zoneID).Str("device", handler.Name).Msg("Air handler in maintenance mode - skipping failsafe activation")
+	} else if err == nil && handler != nil {
 		if device.CanToggle(&handler.Device, time.Now()) {
 			if mode == model.ModeCooling {
 				log.Info().Str("zone", zoneID).Msg("Activating air handler for failsafe cooling")

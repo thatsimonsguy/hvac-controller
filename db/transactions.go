@@ -163,6 +163,31 @@ func UpdateDeviceOnlineStatus(db *sql.DB, id int, online bool) error {
 	return tx.Commit()
 }
 
+// SetDeviceOnlineByName sets a device's online flag (the maintenance-mode flag) by device name.
+// online=false puts the device into maintenance mode; online=true returns it to service.
+// Returns an error if no device with that name exists.
+func SetDeviceOnlineByName(db *sql.DB, name string, online bool) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("start transaction: %w", err)
+	}
+	res, err := tx.Exec(`UPDATE devices SET online = ? WHERE name = ?`, online, name)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("update device online status for %s: %w", name, err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("check rows affected for %s: %w", name, err)
+	}
+	if rows == 0 {
+		tx.Rollback()
+		return fmt.Errorf("no device found with name %q", name)
+	}
+	return tx.Commit()
+}
+
 func SwapPrimaryHeatPump(db *sql.DB) error {
 	tx, err := db.Begin()
 	if err != nil {

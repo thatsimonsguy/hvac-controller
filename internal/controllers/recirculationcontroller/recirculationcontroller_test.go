@@ -162,6 +162,45 @@ func TestEvaluateRecirculation_BlowerOnSystemCirculate(t *testing.T) {
 	assert.False(t, deactivateCalled)
 }
 
+func TestEvaluateRecirculation_HandlerOfflineSkipped(t *testing.T) {
+	// A handler that is offline (maintenance mode) but otherwise due for recirculation
+	// (13h since last toggle, eligible to toggle) must not be activated.
+	handler := &model.AirHandler{
+		Device: model.Device{
+			Name:        "test-handler",
+			MinOn:       3 * time.Minute,
+			MinOff:      1 * time.Minute,
+			Online:      false,
+			LastChanged: time.Now().Add(-13 * time.Hour),
+		},
+		Zone: &model.Zone{ID: "test-zone"},
+	}
+
+	activateCalled := false
+	deactivateCalled := false
+
+	origActivateBlower := activateBlower
+	origDeactivateBlower := deactivateBlower
+	origCanToggle := canToggle
+	origCurrentlyActive := currentlyActive
+	defer func() {
+		activateBlower = origActivateBlower
+		deactivateBlower = origDeactivateBlower
+		canToggle = origCanToggle
+		currentlyActive = origCurrentlyActive
+	}()
+
+	activateBlower = func(*model.AirHandler, *sql.DB) { activateCalled = true }
+	deactivateBlower = func(*model.AirHandler, *sql.DB) { deactivateCalled = true }
+	canToggle = func(*model.Device, time.Time) bool { return true }
+	currentlyActive = func(model.GPIOPin) bool { return false }
+
+	evaluateRecirculation(handler, model.ModeOff, nil)
+
+	assert.False(t, activateCalled, "offline handler must never be activated for recirculation")
+	assert.False(t, deactivateCalled)
+}
+
 func TestEvaluateRecirculation_BlowerOnMoreThan15Minutes(t *testing.T) {
 	handler := &model.AirHandler{
 		Device: model.Device{

@@ -96,6 +96,15 @@ func RunZoneController(zone *model.Zone, dbConn *sql.DB, tempService Temperature
 				canToggleLoop = device.CanToggle(&loop.Device, time.Now())
 			}
 
+			// Devices in maintenance mode (Online == false) must never be energized. Force any
+			// offline distribution device off and exclude it from this cycle's control decisions.
+			hadDevice := handler != nil || loop != nil
+			handler, loop = excludeOfflineDevices(handler, loop, canToggleHandler, canToggleLoop, dbConn)
+			if hadDevice && handler == nil && loop == nil {
+				log.Info().Str("zone", zone.ID).Msg("All distribution devices in maintenance mode - nothing to control this cycle")
+				continue
+			}
+
 			// Get active states for devices
 			blowerActive := false
 			pumpActive := false
@@ -213,6 +222,35 @@ func RunZoneController(zone *model.Zone, dbConn *sql.DB, tempService Temperature
 
 		}
 	}()
+}
+
+// excludeOfflineDevices enforces maintenance mode for distribution devices. Any device whose
+// Online flag is false must never be energized, so if it is currently on (and eligible to toggle)
+// it is forced off directly here — bypassing the recirculation override so a unit taken out of
+// service is always powered down — and then removed from control (returned as nil) for the rest of
+// the cycle. Devices that are online are returned unchanged.
+func excludeOfflineDevices(
+	handler *model.AirHandler,
+	loop *model.RadiantFloorLoop,
+	canToggleHandler bool,
+	canToggleLoop bool,
+	dbConn *sql.DB,
+) (*model.AirHandler, *model.RadiantFloorLoop) {
+	if handler != nil && !handler.Online {
+		if canToggleHandler && (gpio.CurrentlyActive(handler.Pin) || gpio.CurrentlyActive(handler.CircPumpPin)) {
+			log.Info().Str("device", handler.Name).Msg("Air handler in maintenance mode - forcing off")
+			device.DeactivateAirHandler(handler, dbConn)
+		}
+		handler = nil
+	}
+	if loop != nil && !loop.Online {
+		if canToggleLoop && gpio.CurrentlyActive(loop.Pin) {
+			log.Info().Str("device", loop.Name).Msg("Radiant loop in maintenance mode - forcing off")
+			device.DeactivateRadiantLoop(loop, dbConn)
+		}
+		loop = nil
+	}
+	return handler, loop
 }
 
 func evaluateZoneActions(

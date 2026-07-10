@@ -104,8 +104,9 @@ func setupTestServer(t *testing.T) (*Server, *sql.DB) {
 		ZoneMinTemp:         50.0,
 		ZoneMaxTemp:         95.0,
 	}
-	tempService := temperature.NewService(database, cfg.PollIntervalSeconds)
-	
+	// Use the test constructor so we don't depend on the global env.Cfg (nil in unit tests).
+	tempService := temperature.NewServiceForTest(database, cfg.PollIntervalSeconds, &temperature.TestDeps{})
+
 	server := NewServer(database, tempService, cfg)
 	return server, database
 }
@@ -386,6 +387,123 @@ func TestInvalidPaths(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			server.handleZoneOperations(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+		})
+	}
+}
+
+func seedAirHandler(t *testing.T, database *sql.DB, name, zoneID string, online bool) {
+	_, err := database.Exec(`INSERT INTO devices
+		(name, pin_number, pin_active_high, min_on, min_off, online, active_modes, device_type, zone_id)
+		VALUES (?, 5, 1, 180, 60, ?, '["heating","cooling","fan"]', 'air_handler', ?)`,
+		name, online, zoneID)
+	require.NoError(t, err)
+}
+
+func deviceOnline(t *testing.T, database *sql.DB, name string) bool {
+	var online bool
+	require.NoError(t, database.QueryRow(`SELECT online FROM devices WHERE name = ?`, name).Scan(&online))
+	return online
+}
+
+func TestGetDevices(t *testing.T) {
+	server, database := setupTestServer(t)
+	defer database.Close()
+
+	seedAirHandler(t, database, "main_floor_air_handler", "zone1", true)
+	seedAirHandler(t, database, "basement_air_handler", "zone2", false)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/devices", nil)
+	w := httptest.NewRecorder()
+
+	server.handleDevices(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response []DeviceResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	require.Len(t, response, 2)
+
+	byName := map[string]DeviceResponse{}
+	for _, d := range response {
+		byName[d.Name] = d
+	}
+
+	assert.True(t, byName["main_floor_air_handler"].Online)
+	assert.False(t, byName["main_floor_air_handler"].Maintenance)
+	assert.Equal(t, "air_handler", byName["main_floor_air_handler"].Type)
+	assert.Equal(t, "zone1", byName["main_floor_air_handler"].Zone)
+
+	assert.False(t, byName["basement_air_handler"].Online)
+	assert.True(t, byName["basement_air_handler"].Maintenance)
+}
+
+func TestSetDeviceMaintenance(t *testing.T) {
+	server, database := setupTestServer(t)
+	defer database.Close()
+
+	seedAirHandler(t, database, "main_floor_air_handler", "zone1", true)
+
+	tests := []struct {
+		name           string
+		device         string
+		maintenance    bool
+		expectedStatus int
+		expectOnline   bool // only checked when expectedStatus == 200
+	}{
+		{"enter maintenance", "main_floor_air_handler", true, http.StatusOK, false},
+		{"exit maintenance", "main_floor_air_handler", false, http.StatusOK, true},
+		{"unknown device", "does_not_exist", true, http.StatusNotFound, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reqBody := DeviceMaintenanceRequest{Maintenance: tt.maintenance}
+			reqJSON, _ := json.Marshal(reqBody)
+
+			req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/devices/%s/maintenance", tt.device), bytes.NewBuffer(reqJSON))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			server.handleDeviceOperations(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+			if tt.expectedStatus == http.StatusOK {
+				assert.Equal(t, tt.expectOnline, deviceOnline(t, database, tt.device))
+			}
+		})
+	}
+}
+
+func TestDeviceOperationsMethodAndPath(t *testing.T) {
+	server, database := setupTestServer(t)
+	defer database.Close()
+
+	seedAirHandler(t, database, "main_floor_air_handler", "zone1", true)
+
+	tests := []struct {
+		name           string
+		method         string
+		path           string
+		expectedStatus int
+	}{
+		{"POST to devices list", http.MethodPost, "/api/devices", http.StatusMethodNotAllowed},
+		{"GET on maintenance", http.MethodGet, "/api/devices/main_floor_air_handler/maintenance", http.StatusMethodNotAllowed},
+		{"unknown device operation", http.MethodPut, "/api/devices/main_floor_air_handler/unknown", http.StatusNotFound},
+		{"device name required", http.MethodPut, "/api/devices/", http.StatusNotFound},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			w := httptest.NewRecorder()
+
+			if tt.path == "/api/devices" {
+				server.handleDevices(w, req)
+			} else {
+				server.handleDeviceOperations(w, req)
+			}
 
 			assert.Equal(t, tt.expectedStatus, w.Code)
 		})

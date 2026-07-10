@@ -80,6 +80,43 @@ func TestRecirculationMigration(t *testing.T) {
 	assert.WithinDuration(t, now, startedAt, time.Second)
 }
 
+func TestSetDeviceOnlineByName(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	require.NoError(t, err)
+	defer db.Close()
+
+	_, err = db.Exec(`CREATE TABLE devices (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT,
+		online BOOLEAN
+	)`)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`INSERT INTO devices (name, online) VALUES ('main_floor_air_handler', 1)`)
+	require.NoError(t, err)
+
+	readOnline := func() bool {
+		var online bool
+		require.NoError(t, db.QueryRow(`SELECT online FROM devices WHERE name = 'main_floor_air_handler'`).Scan(&online))
+		return online
+	}
+
+	t.Run("take offline (enter maintenance mode)", func(t *testing.T) {
+		require.NoError(t, SetDeviceOnlineByName(db, "main_floor_air_handler", false))
+		assert.False(t, readOnline())
+	})
+
+	t.Run("return to service", func(t *testing.T) {
+		require.NoError(t, SetDeviceOnlineByName(db, "main_floor_air_handler", true))
+		assert.True(t, readOnline())
+	})
+
+	t.Run("unknown device name errors", func(t *testing.T) {
+		err := SetDeviceOnlineByName(db, "does_not_exist", false)
+		assert.Error(t, err)
+	})
+}
+
 func TestRecirculationOverrideFunctions(t *testing.T) {
 	// Create in-memory test database
 	db, err := sql.Open("sqlite3", ":memory:")

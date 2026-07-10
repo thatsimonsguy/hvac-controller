@@ -32,3 +32,14 @@ func SetZoneSetpointCLI(dbPath, zoneID string, setpoint float64) error {
 	defer db.Close()
 	return UpdateZoneSetpoint(db, zoneID, setpoint)
 }
+
+// SetDeviceOnlineCLI toggles a device's maintenance-mode flag by device name.
+// online=false takes the device out of service (maintenance mode); online=true restores it.
+func SetDeviceOnlineCLI(dbPath, deviceName string, online bool) error {
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	return SetDeviceOnlineByName(db, deviceName, online)
+}

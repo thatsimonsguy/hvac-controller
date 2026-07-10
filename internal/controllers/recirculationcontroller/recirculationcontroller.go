@@ -75,6 +75,16 @@ func RunRecirculationController(dbConn *sql.DB) {
 }
 
 func evaluateRecirculation(handler *model.AirHandler, sysMode model.SystemMode, dbConn *sql.DB) {
+	// An air handler in maintenance mode (Online == false) must never be energized, including for
+	// the periodic recirculation cycle.
+	if !handler.Online {
+		log.Debug().
+			Str("zone", handler.Zone.ID).
+			Str("device", handler.Name).
+			Msg("Air handler in maintenance mode - skipping recirculation")
+		return
+	}
+
 	now := time.Now()
 	blowerActive := currentlyActive(handler.Pin)
 	pumpActive := currentlyActive(handler.CircPumpPin)

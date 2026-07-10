@@ -295,6 +295,34 @@ func GetRadiantLoopByID(db *sql.DB, id string) (*model.RadiantFloorLoop, error) 
 	return &radiantLoops[0], nil
 }
 
+// DeviceStatus is a lightweight, type-agnostic view of a device used for reporting maintenance
+// (online) state across all device types.
+type DeviceStatus struct {
+	Name   string
+	Type   string
+	ZoneID string // empty when the device is not associated with a zone
+	Online bool
+}
+
+// GetAllDeviceStatuses returns the maintenance-relevant status of every device, regardless of type.
+func GetAllDeviceStatuses(db *sql.DB) ([]DeviceStatus, error) {
+	rows, err := db.Query(`SELECT name, device_type, COALESCE(zone_id, ''), online FROM devices ORDER BY device_type, name`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query device statuses: %w", err)
+	}
+	defer rows.Close()
+
+	var statuses []DeviceStatus
+	for rows.Next() {
+		var d DeviceStatus
+		if err := rows.Scan(&d.Name, &d.Type, &d.ZoneID, &d.Online); err != nil {
+			return nil, fmt.Errorf("failed to scan device status: %w", err)
+		}
+		statuses = append(statuses, d)
+	}
+	return statuses, nil
+}
+
 // GetMainPowerPin retrieves the main power pin configuration as a GPIOPin.
 func GetMainPowerPin(db *sql.DB) (model.GPIOPin, error) {
 	var pinNumber int
